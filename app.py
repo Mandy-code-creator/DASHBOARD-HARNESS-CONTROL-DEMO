@@ -3,7 +3,25 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 
-st.set_page_config(layout="wide", page_title="Hardness & Mechanical Control Dashboard")
+st.set_page_config(
+    page_title="Hardness & Mechanical Property Control",
+    layout="wide"
+)
+
+# =========================
+# UTIL FUNCTIONS
+# =========================
+def safe_percentile(series, q):
+    s = series.dropna()
+    if len(s) == 0:
+        return None
+    return np.percentile(s, q)
+
+def safe_mean(series):
+    s = series.dropna()
+    if len(s) == 0:
+        return None
+    return s.mean()
 
 # =========================
 # LOAD DATA
@@ -13,10 +31,8 @@ def load_data():
     url = "https://docs.google.com/spreadsheets/d/1GdnY09hJ2qVHuEBAIJ-eU6B5z8ZdgcGf4P7ZjlAt4JI/export?format=csv"
     df = pd.read_csv(url)
 
-    # strip column names
     df.columns = [c.strip() for c in df.columns]
 
-    # force numeric columns
     num_cols = [
         "Standard Hardness",
         "HARDNESS 冶金",
@@ -27,7 +43,7 @@ def load_data():
         "TENSILE_TENSILE",
         "TENSILE_ELONG",
         "ORDER GAUGE",
-        "TOP COATMASS",
+        "TOP COATMASS"
     ]
 
     for c in num_cols:
@@ -36,43 +52,34 @@ def load_data():
 
     return df
 
-
 df0 = load_data()
 
 # =========================
-# SAFE FILTER FUNCTION
+# SIDEBAR FILTERS (SAFE)
 # =========================
-def safe_filter(df0, df_f, col, label):
-    df0[col] = df0[col].astype(str)
-    df_f[col] = df_f[col].astype(str)
-
-    options = sorted(df0[col].dropna().unique())
-    default = sorted(df_f[col].dropna().unique())
-
-    if len(default) == 0:
-        default = options
-
-    selected = st.sidebar.multiselect(label, options, default=default)
-    return df_f[df_f[col].isin(selected)]
-
-
-# =========================
-# SIDEBAR FILTERS
-# =========================
-st.sidebar.header("🔎 Hierarchical Filter")
+st.sidebar.header("🔎 Hierarchical Filters")
 
 df_f = df0.copy()
 
-df_f = safe_filter(df0, df_f, "QUALITY_CODE", "QUALITY CODE")
-df_f = safe_filter(df0, df_f, "PRODUCT SPECIFICATION CODE", "STANDARD")
-df_f = safe_filter(df0, df_f, "HR STEEL GRADE", "MATERIAL")
-df_f = safe_filter(df0, df_f, "ORDER GAUGE", "THICKNESS")
-df_f = safe_filter(df0, df_f, "TOP COATMASS", "COATING")
+def apply_filter(df_base, df_current, col, label):
+    df_base[col] = df_base[col].astype(str)
+    df_current[col] = df_current[col].astype(str)
+
+    options = sorted(df_base[col].dropna().unique())
+    selected = st.sidebar.multiselect(label, options, default=options)
+
+    return df_current[df_current[col].isin(selected)]
+
+df_f = apply_filter(df0, df_f, "QUALITY_CODE", "QUALITY CODE")
+df_f = apply_filter(df0, df_f, "PRODUCT SPECIFICATION CODE", "STANDARD")
+df_f = apply_filter(df0, df_f, "HR STEEL GRADE", "MATERIAL")
+df_f = apply_filter(df0, df_f, "ORDER GAUGE", "THICKNESS")
+df_f = apply_filter(df0, df_f, "TOP COATMASS", "COATING")
 
 st.sidebar.write("✅ Rows after filter:", len(df_f))
 
 if df_f.empty:
-    st.error("❌ No data after filtering – combination does not exist")
+    st.error("❌ No data after filtering – this combination does not exist")
     st.stop()
 
 # =========================
@@ -90,44 +97,60 @@ tab1, tab2, tab3, tab4, tab5 = st.tabs([
     "1️⃣ Overview",
     "2️⃣ Hardness Analysis",
     "3️⃣ Mechanical Properties",
-    "4️⃣ Thickness / Coating Effect",
+    "4️⃣ Thickness / Coating / Material",
     "5️⃣ Control Suggestion"
 ])
 
 # =========================
-# TAB 1
+# TAB 1 – OVERVIEW
 # =========================
 with tab1:
     st.subheader("Dataset Overview")
     st.dataframe(df_f, use_container_width=True)
 
-    col1, col2, col3 = st.columns(3)
-    col1.metric("Samples", len(df_f))
-    col2.metric("Mean Std Hardness", f"{df_f['Standard Hardness'].mean():.1f}")
-    col3.metric("Mean LAB Hardness", f"{df_f['HARDNESS 冶金'].mean():.1f}")
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Samples", len(df_f))
+    c2.metric(
+        "Mean Std Hardness",
+        f"{safe_mean(df_f['Standard Hardness']):.1f}"
+        if safe_mean(df_f['Standard Hardness']) is not None else "N/A"
+    )
+    c3.metric(
+        "Mean LAB Hardness",
+        f"{safe_mean(df_f['HARDNESS 冶金']):.1f}"
+        if safe_mean(df_f['HARDNESS 冶金']) is not None else "N/A"
+    )
 
 # =========================
-# TAB 2
+# TAB 2 – HARDNESS
 # =========================
 with tab2:
-    st.subheader("Hardness vs Standard")
+    st.subheader("Hardness vs Standard (LAB)")
+
+    if df_f["ΔH_LAB"].dropna().shape[0] < 3:
+        st.warning("⚠️ Sample size too small for statistical analysis")
 
     fig, ax = plt.subplots()
     ax.hist(df_f["ΔH_LAB"].dropna(), bins=20)
     ax.axvline(0, linestyle="--")
-    ax.set_title("ΔH LAB Distribution")
+    ax.set_xlabel("ΔH (LAB - Standard)")
+    ax.set_ylabel("Count")
     st.pyplot(fig)
 
-    col1, col2, col3 = st.columns(3)
-    col1.metric("ΔH LAB Mean", f"{df_f['ΔH_LAB'].mean():.2f}")
-    col2.metric("ΔH LAB P10", f"{np.percentile(df_f['ΔH_LAB'].dropna(),10):.2f}")
-    col3.metric("ΔH LAB P90", f"{np.percentile(df_f['ΔH_LAB'].dropna(),90):.2f}")
+    p10 = safe_percentile(df_f["ΔH_LAB"], 10)
+    p90 = safe_percentile(df_f["ΔH_LAB"], 90)
+    mean_dh = safe_mean(df_f["ΔH_LAB"])
+
+    c1, c2, c3 = st.columns(3)
+    c1.metric("ΔH LAB Mean", f"{mean_dh:.2f}" if mean_dh is not None else "N/A")
+    c2.metric("ΔH LAB P10", f"{p10:.2f}" if p10 is not None else "N/A")
+    c3.metric("ΔH LAB P90", f"{p90:.2f}" if p90 is not None else "N/A")
 
 # =========================
-# TAB 3
+# TAB 3 – MECHANICAL
 # =========================
 with tab3:
-    st.subheader("Mechanical Properties")
+    st.subheader("Mechanical Properties (YS / TS / EL)")
 
     fig, ax = plt.subplots()
     df_f[["TENSILE_YIELD", "TENSILE_TENSILE", "TENSILE_ELONG"]].boxplot(ax=ax)
@@ -136,10 +159,10 @@ with tab3:
     st.write(df_f[["TENSILE_YIELD", "TENSILE_TENSILE", "TENSILE_ELONG"]].describe())
 
 # =========================
-# TAB 4
+# TAB 4 – EFFECT ANALYSIS
 # =========================
 with tab4:
-    st.subheader("Thickness / Coating Effect on Hardness")
+    st.subheader("Thickness / Coating / Material Effect")
 
     fig, ax = plt.subplots()
     ax.scatter(df_f["ORDER GAUGE"], df_f["HARDNESS 冶金"], alpha=0.7)
@@ -148,20 +171,20 @@ with tab4:
     st.pyplot(fig)
 
 # =========================
-# TAB 5
+# TAB 5 – CONTROL LOGIC
 # =========================
 with tab5:
-    st.subheader("Control Suggestion Logic")
+    st.subheader("Hardness Control Suggestion")
 
-    p10 = np.percentile(df_f["HARDNESS 冶金"].dropna(), 10)
-    p50 = np.percentile(df_f["HARDNESS 冶金"].dropna(), 50)
+    p10_h = safe_percentile(df_f["HARDNESS 冶金"], 10)
 
-    st.write(f"**LAB Hardness P10:** {p10:.1f}")
-    st.write(f"**LAB Hardness P50:** {p50:.1f}")
+    st.write("**LAB Hardness P10:**", f"{p10_h:.1f}" if p10_h is not None else "N/A")
 
-    if p10 > 7:
+    if p10_h is None:
+        st.warning("⚠️ Not enough data to judge control limit")
+    elif p10_h > 7:
         st.success("🟢 Control is conservative")
-    elif 5 <= p10 <= 7:
+    elif 5 <= p10_h <= 7:
         st.warning("🟡 Control is reasonable")
     else:
-        st.error("🔴 Control is risky – need tightening by material / thickness / coating")
+        st.error("🔴 Control is risky – limit must be tightened by material / thickness / coating")
