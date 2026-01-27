@@ -2,8 +2,11 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 
+# =========================
+# PAGE CONFIG
+# =========================
 st.set_page_config(
-    page_title="GI Hardness Dashboard",
+    page_title="GI Hardness Control Dashboard",
     layout="wide"
 )
 
@@ -14,37 +17,80 @@ st.title("GI Hardness & Mechanical Property Dashboard")
 # =========================
 @st.cache_data
 def load_data():
-    sheet_id = "PUT_YOUR_SHEET_ID_HERE"
+    SHEET_ID = "PUT_YOUR_SHEET_ID_HERE"
     url = f"https://docs.google.com/spreadsheets/d/1GdnY09hJ2qVHuEBAIJ-eU6B5z8ZdgcGf4P7ZjlAt4JI/export?format=csv"
     df = pd.read_csv(url)
     return df
 
 df = load_data()
 
-st.subheader("Raw data preview")
-st.dataframe(df.head())
-
 # =========================
-# SELECT HARDNESS SOURCE
+# CLEAN COLUMN NAMES (CRITICAL)
 # =========================
-st.sidebar.header("Settings")
-hardness_source = st.sidebar.radio(
-    "Hardness source",
-    ["HARDNESS 冶金", "HARDNESS 鍍鋅線 C"]
+df.columns = (
+    df.columns
+    .astype(str)
+    .str.replace("\n", " ", regex=False)
+    .str.replace("  ", " ", regex=False)
+    .str.strip()
 )
 
-# =========================
-# CREATE ANALYSIS COLUMNS
-# =========================
-HARDNESS = df[hardness_source]
-HMAX = df["Standard Hardness"]
+st.subheader("Column names (debug)")
+st.write(df.columns.tolist())
 
-# ΔH to upper spec
+# =========================
+# AUTO FIND HARDNESS COLUMNS
+# =========================
+lab_col = [c for c in df.columns if "HARDNESS" in c and "冶金" in c]
+line_col = [c for c in df.columns if "HARDNESS" in c and "鍍鋅線" in c and "C" in c]
+
+spec_col = [c for c in df.columns if "Standard" in c and "Hardness" in c]
+
+if not lab_col:
+    st.error("❌ Không tìm thấy cột HARDNESS 冶金 (LAB)")
+    st.stop()
+
+if not line_col:
+    st.error("❌ Không tìm thấy cột HARDNESS 鍍鋅線 C (LINE)")
+    st.stop()
+
+if not spec_col:
+    st.error("❌ Không tìm thấy cột Standard Hardness")
+    st.stop()
+
+hardness_map = {
+    "LAB – 冶金 (center)": lab_col[0],
+    "LINE – GI (center C)": line_col[0],
+}
+
+# =========================
+# SIDEBAR
+# =========================
+st.sidebar.header("Settings")
+
+hardness_label = st.sidebar.radio(
+    "Hardness source",
+    list(hardness_map.keys())
+)
+
+HARDNESS = df[hardness_map[hardness_label]]
+HMAX = df[spec_col[0]]
+
+# =========================
+# NUMERIC SAFETY
+# =========================
+HARDNESS = pd.to_numeric(HARDNESS, errors="coerce")
+HMAX = pd.to_numeric(HMAX, errors="coerce")
+
+# =========================
+# CORE ANALYSIS
+# =========================
 df["ΔH_spec"] = HMAX - HARDNESS
 
-# Hardness band
 def hardness_band(x):
-    if x >= 10:
+    if pd.isna(x):
+        return "NA"
+    elif x >= 10:
         return "≥10"
     elif x >= 7:
         return "7–10"
@@ -57,9 +103,10 @@ def hardness_band(x):
 
 df["Hardness_Band"] = df["ΔH_spec"].apply(hardness_band)
 
-# Decision zone
 def decision_zone(x):
-    if x >= 7:
+    if pd.isna(x):
+        return "NA"
+    elif x >= 7:
         return "SAFE"
     elif x >= 5:
         return "WATCH"
@@ -69,18 +116,48 @@ def decision_zone(x):
 df["Zone"] = df["ΔH_spec"].apply(decision_zone)
 
 # =========================
-# SHOW RESULT TABLE
+# KPI
 # =========================
-st.subheader("Analysis table")
+st.subheader("KPI – Hardness Control")
+
+col1, col2, col3 = st.columns(3)
+
+total = len(df)
+safe_pct = (df["Zone"] == "SAFE").mean() * 100
+watch_pct = (df["Zone"] == "WATCH").mean() * 100
+risk_pct = (df["Zone"] == "RISK").mean() * 100
+
+col1.metric("SAFE (%)", f"{safe_pct:.1f}%")
+col2.metric("WATCH (%)", f"{watch_pct:.1f}%")
+col3.metric("RISK (%)", f"{risk_pct:.1f}%")
+
+# =========================
+# RESULT TABLE
+# =========================
+st.subheader("Analysis Table")
+
+show_cols = [
+    hardness_map[hardness_label],
+    spec_col[0],
+    "ΔH_spec",
+    "Hardness_Band",
+    "Zone"
+]
+
+extra_cols = [c for c in ["TENSILE_YIELD", "TENSILE_TENSILE", "TENSILE_ELONG"] if c in df.columns]
+show_cols.extend(extra_cols)
+
 st.dataframe(
-    df[
-        [
-            hardness_source,
-            "Standard Hardness",
-            "ΔH_spec",
-            "Hardness_Band",
-            "Zone",
-            "TENSILE_ELONG",
-        ]
-    ].head(20)
+    df[show_cols].sort_values("ΔH_spec").reset_index(drop=True),
+    use_container_width=True
 )
+
+# =========================
+# TECH NOTE
+# =========================
+st.markdown("""
+### Technical note
+- ΔH_spec = Hmax − Hardness(center)
+- SAFE zone defined as ΔH ≥ 7 HRB
+- Threshold will be validated by historical EL / TS / YS correlation
+""")
