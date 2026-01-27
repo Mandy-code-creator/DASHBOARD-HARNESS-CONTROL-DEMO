@@ -27,30 +27,50 @@ df = load_data(DATA_URL)
 # =========================
 # CLEAN COLUMN NAMES
 # =========================
-df.columns = df.columns.str.strip()
+df.columns = (
+    df.columns
+      .str.replace("\n", " ", regex=False)
+      .str.replace("  ", " ")
+      .str.strip()
+)
 
 # =========================
-# COLUMN DEFINITIONS
+# AUTO FIND COLUMNS
 # =========================
-COL_STANDARD = "Standard Hardness"
-COL_LAB = "HARDNESS\n冶金"
-COL_LINE_C = "HARDNESS\n鍍鋅線\nC"
+def find_col(keyword_list):
+    for c in df.columns:
+        for k in keyword_list:
+            if k.lower() in c.lower():
+                return c
+    return None
+
+COL_STANDARD = find_col(["standard hardness"])
+COL_LAB = find_col(["冶金"])
+COL_LINE = find_col(["鍍鋅線", "galvanizing", "line c"])
 
 # =========================
-# BASIC CHECK
+# CHECK
+# =========================
+if not all([COL_STANDARD, COL_LAB, COL_LINE]):
+    st.error("❌ Cannot auto-detect hardness columns")
+    st.write("Detected columns:")
+    st.write(df.columns.tolist())
+    st.stop()
+
+# =========================
+# REQUIRED PROCESS COLUMNS
 # =========================
 required_cols = [
     "HR STEEL GRADE",
     "ORDER GAUGE",
     "TOP COATMASS",
+    "TENSILE_ELONG",
     COL_STANDARD,
     COL_LAB,
-    COL_LINE_C,
-    "TENSILE_ELONG"
+    COL_LINE
 ]
 
 missing = [c for c in required_cols if c not in df.columns]
-
 if missing:
     st.error(f"❌ Missing columns: {missing}")
     st.stop()
@@ -58,10 +78,10 @@ if missing:
 # =========================
 # DATA TYPE
 # =========================
-for c in [COL_STANDARD, COL_LAB, COL_LINE_C, "TENSILE_ELONG"]:
+for c in [COL_STANDARD, COL_LAB, COL_LINE, "TENSILE_ELONG"]:
     df[c] = pd.to_numeric(df[c], errors="coerce")
 
-df = df.dropna(subset=[COL_STANDARD, COL_LAB, COL_LINE_C])
+df = df.dropna(subset=[COL_STANDARD, COL_LAB, COL_LINE])
 
 # =========================
 # CREATE GROUP
@@ -76,11 +96,11 @@ df["GROUP"] = (
 # CALCULATE DELTA
 # =========================
 df["ΔH_LAB"] = df[COL_STANDARD] - df[COL_LAB]
-df["ΔH_LINE"] = df[COL_STANDARD] - df[COL_LINE_C]
-df["LINE_MINUS_LAB"] = df[COL_LINE_C] - df[COL_LAB]
+df["ΔH_LINE"] = df[COL_STANDARD] - df[COL_LINE]
+df["LINE_MINUS_LAB"] = df[COL_LINE] - df[COL_LAB]
 
 # =========================
-# SIDEBAR FILTER
+# SIDEBAR
 # =========================
 st.sidebar.header("Filter")
 
@@ -96,48 +116,28 @@ df_g = df[df["GROUP"] == group_selected]
 # =========================
 st.subheader("📊 Key Statistics")
 
-col1, col2, col3 = st.columns(3)
+c1, c2, c3 = st.columns(3)
 
-with col1:
-    st.metric(
-        "ΔH LAB (P10)",
-        f"{np.percentile(df_g['ΔH_LAB'],10):.2f}"
-    )
+with c1:
+    st.metric("ΔH LAB (P10)", f"{np.percentile(df_g['ΔH_LAB'],10):.2f}")
 
-with col2:
-    st.metric(
-        "ΔH LINE (P10)",
-        f"{np.percentile(df_g['ΔH_LINE'],10):.2f}"
-    )
+with c2:
+    st.metric("ΔH LINE (P10)", f"{np.percentile(df_g['ΔH_LINE'],10):.2f}")
 
-with col3:
-    st.metric(
-        "LINE − LAB Mean",
-        f"{df_g['LINE_MINUS_LAB'].mean():.2f}"
-    )
+with c3:
+    st.metric("LINE − LAB Mean", f"{df_g['LINE_MINUS_LAB'].mean():.2f}")
 
 # =========================
-# SCATTER: ΔH vs EL
+# SCATTER
 # =========================
 st.subheader("🔍 Hardness Margin vs Elongation")
 
 fig, ax = plt.subplots(figsize=(9,5))
 
-ax.scatter(
-    df_g["ΔH_LINE"],
-    df_g["TENSILE_ELONG"],
-    alpha=0.7,
-    label="LINE"
-)
+ax.scatter(df_g["ΔH_LINE"], df_g["TENSILE_ELONG"], label="LINE", alpha=0.7)
+ax.scatter(df_g["ΔH_LAB"], df_g["TENSILE_ELONG"], label="LAB", alpha=0.7)
 
-ax.scatter(
-    df_g["ΔH_LAB"],
-    df_g["TENSILE_ELONG"],
-    alpha=0.7,
-    label="LAB"
-)
-
-ax.axvline(7, linestyle="--", label="Control limit = 7 HRB")
+ax.axvline(7, linestyle="--", label="Current control = 7 HRB")
 
 ax.set_xlabel("Standard − Hardness (HRB)")
 ax.set_ylabel("Elongation (%)")
@@ -149,7 +149,7 @@ st.pyplot(fig)
 # =========================
 # SUMMARY TABLE
 # =========================
-st.subheader("📋 Summary Table")
+st.subheader("📋 Summary")
 
 summary = (
     df_g
@@ -167,16 +167,14 @@ summary = (
 st.dataframe(summary, use_container_width=True)
 
 # =========================
-# TECHNICAL CONCLUSION
+# CONCLUSION
 # =========================
-st.subheader("🧠 Technical Interpretation")
+st.subheader("🧠 Interpretation Logic")
 
 st.markdown("""
-**How to judge current control limit (Standard − 7 HRB):**
+- **LINE_P10 ≫ 7** → current limit is conservative  
+- **LINE_P10 ≈ 5–7** → current limit is reasonable  
+- **LINE_P10 < 5 + EL drop** → current limit is risky  
 
-- If **LINE_P10 ≫ 7** and **EL is stable** → limit is conservative  
-- If **LINE_P10 ≈ 5~7** → limit is reasonable  
-- If **LINE_P10 < 5** and **EL drops** → limit is risky  
-
-⚠️ Control limit should be defined **by GROUP**, not globally.
+⚠️ Always control **by group (material + thickness + coating)**, not globally.
 """)
