@@ -7,11 +7,12 @@ import matplotlib.pyplot as plt
 # PAGE CONFIG
 # =========================
 st.set_page_config(
-    page_title="GI Hardness Control Dashboard",
+    page_title="Quality-driven Hardness Analysis",
     layout="wide"
 )
 
-st.title("GI HARDNESS CONTROL – LAB vs LINE vs STANDARD")
+st.title("🔍 QUALITY → STANDARD → MATERIAL → THICKNESS → COATING")
+st.caption("Hardness control logic driven by QUALITY_CODE")
 
 # =========================
 # LOAD DATA
@@ -25,171 +26,169 @@ def load_data(url):
 df = load_data(DATA_URL)
 
 # =========================
-# CLEAN COLUMN NAMES
+# CLEAN COLUMNS
 # =========================
-df.columns = (
-    df.columns
-      .str.replace("\n", " ", regex=False)
-      .str.replace("  ", " ")
-      .str.strip()
-)
+df.columns = df.columns.str.replace("\n", " ", regex=False).str.strip()
 
 # =========================
-# AUTO FIND COLUMNS
+# COLUMN MAP
 # =========================
-def find_col(keywords):
-    for c in df.columns:
-        for k in keywords:
-            if k.lower() in c.lower():
-                return c
-    return None
+COL_STD = "Standard Hardness"
+COL_LAB = "HARDNESS 冶金"
+COL_LINE = "HARDNESS 鍍鋅線 C"
 
-COL_STANDARD = find_col(["standard hardness"])
-COL_LAB = find_col(["冶金"])
-COL_LINE = find_col(["鍍鋅線", "galvan"])
+COL_YS = "TENSILE_YIELD"
+COL_TS = "TENSILE_TENSILE"
+COL_EL = "TENSILE_ELONG"
 
 # =========================
-# CHECK
+# REQUIRED CHECK
 # =========================
-if not all([COL_STANDARD, COL_LAB, COL_LINE]):
-    st.error("❌ Cannot auto-detect hardness columns")
-    st.write(df.columns.tolist())
-    st.stop()
-
-# =========================
-# REQUIRED
-# =========================
-required_cols = [
+required = [
+    "QUALITY_CODE",
+    "PRODUCT SPECIFICATION CODE",
     "HR STEEL GRADE",
     "ORDER GAUGE",
     "TOP COATMASS",
-    "TENSILE_ELONG",
-    COL_STANDARD,
-    COL_LAB,
-    COL_LINE
+    COL_STD, COL_LAB, COL_LINE,
+    COL_YS, COL_TS, COL_EL
 ]
 
-missing = [c for c in required_cols if c not in df.columns]
+missing = [c for c in required if c not in df.columns]
 if missing:
     st.error(f"❌ Missing columns: {missing}")
     st.stop()
 
 # =========================
-# DATA TYPE
+# TYPE CONVERSION
 # =========================
-for c in [COL_STANDARD, COL_LAB, COL_LINE, "TENSILE_ELONG"]:
+for c in [COL_STD, COL_LAB, COL_LINE, COL_YS, COL_TS, COL_EL, "ORDER GAUGE"]:
     df[c] = pd.to_numeric(df[c], errors="coerce")
 
-df = df.dropna(subset=[COL_STANDARD, COL_LAB, COL_LINE])
+df = df.dropna(subset=[COL_STD, COL_LAB, COL_LINE])
 
 # =========================
-# CREATE GROUP
+# DERIVED METRICS
 # =========================
-df["GROUP"] = (
-    df["HR STEEL GRADE"].astype(str) + " | " +
-    df["ORDER GAUGE"].astype(str) + "mm | " +
-    df["TOP COATMASS"].astype(str)
-)
-
-# =========================
-# DELTA
-# =========================
-df["ΔH_LAB"] = df[COL_STANDARD] - df[COL_LAB]
-df["ΔH_LINE"] = df[COL_STANDARD] - df[COL_LINE]
+df["ΔH_LAB"] = df[COL_STD] - df[COL_LAB]
+df["ΔH_LINE"] = df[COL_STD] - df[COL_LINE]
 df["LINE_MINUS_LAB"] = df[COL_LINE] - df[COL_LAB]
 
 # =========================
-# SIDEBAR
+# SIDEBAR – HIERARCHY FILTER
 # =========================
-st.sidebar.header("Filter")
-group_selected = st.sidebar.selectbox(
-    "Select Group",
-    sorted(df["GROUP"].unique())
+st.sidebar.header("🔎 Hierarchical Filter")
+
+qc = st.sidebar.selectbox(
+    "QUALITY_CODE",
+    sorted(df["QUALITY_CODE"].dropna().unique())
 )
 
-df_g = df[df["GROUP"] == group_selected]
+df_qc = df[df["QUALITY_CODE"] == qc]
+
+spec = st.sidebar.selectbox(
+    "PRODUCT SPECIFICATION",
+    sorted(df_qc["PRODUCT SPECIFICATION CODE"].dropna().unique())
+)
+
+df_spec = df_qc[df_qc["PRODUCT SPECIFICATION CODE"] == spec]
+
+mat = st.sidebar.selectbox(
+    "HR STEEL GRADE",
+    sorted(df_spec["HR STEEL GRADE"].dropna().unique())
+)
+
+df_mat = df_spec[df_spec["HR STEEL GRADE"] == mat]
+
+thk = st.sidebar.selectbox(
+    "ORDER GAUGE (mm)",
+    sorted(df_mat["ORDER GAUGE"].dropna().unique())
+)
+
+df_thk = df_mat[df_mat["ORDER GAUGE"] == thk]
+
+coat = st.sidebar.selectbox(
+    "TOP COATMASS",
+    sorted(df_thk["TOP COATMASS"].dropna().unique())
+)
+
+df_f = df_thk[df_thk["TOP COATMASS"] == coat]
 
 # =========================
-# SAFE PERCENTILE FUNCTION
+# SAFE FUNCTIONS
 # =========================
-def safe_p10(series):
-    series = series.dropna()
-    if len(series) < 3:
-        return np.nan
-    return np.percentile(series, 10)
+def p10(x):
+    x = x.dropna()
+    return np.nan if len(x) < 3 else np.percentile(x, 10)
+
+def corr(x, y):
+    d = pd.concat([x, y], axis=1).dropna()
+    return np.nan if len(d) < 5 else d.corr().iloc[0,1]
 
 # =========================
 # KPI
 # =========================
-st.subheader("📊 Key Statistics")
+st.subheader("📊 Hardness & Mechanical Risk Indicators")
 
-c1, c2, c3 = st.columns(3)
+c1, c2, c3, c4 = st.columns(4)
 
-with c1:
-    val = safe_p10(df_g["ΔH_LAB"])
-    st.metric("ΔH LAB (P10)", "N/A" if pd.isna(val) else f"{val:.2f}")
-
-with c2:
-    val = safe_p10(df_g["ΔH_LINE"])
-    st.metric("ΔH LINE (P10)", "N/A" if pd.isna(val) else f"{val:.2f}")
-
-with c3:
-    if df_g.empty:
-        st.metric("LINE − LAB Mean", "N/A")
-    else:
-        st.metric("LINE − LAB Mean", f"{df_g['LINE_MINUS_LAB'].mean():.2f}")
+c1.metric("ΔH LINE (P10)", f"{p10(df_f['ΔH_LINE']):.2f}")
+c2.metric("YS (P10)", f"{p10(df_f[COL_YS]):.1f}")
+c3.metric("TS (P10)", f"{p10(df_f[COL_TS]):.1f}")
+c4.metric("Min EL (%)", f"{df_f[COL_EL].min():.1f}")
 
 # =========================
-# SCATTER
+# RELATIONSHIP PLOTS
 # =========================
-st.subheader("🔍 Hardness Margin vs Elongation")
+st.subheader("🔗 Hardness Relationship Analysis")
 
-if len(df_g) >= 3:
-    fig, ax = plt.subplots(figsize=(9,5))
+if len(df_f) >= 3:
+    fig, ax = plt.subplots(1, 3, figsize=(16,4), sharex=True)
 
-    ax.scatter(df_g["ΔH_LINE"], df_g["TENSILE_ELONG"], label="LINE", alpha=0.7)
-    ax.scatter(df_g["ΔH_LAB"], df_g["TENSILE_ELONG"], label="LAB", alpha=0.7)
+    ax[0].scatter(df_f["ΔH_LINE"], df_f[COL_YS])
+    ax[0].set_title("ΔH vs YS")
 
-    ax.axvline(7, linestyle="--", label="Current control = 7 HRB")
+    ax[1].scatter(df_f["ΔH_LINE"], df_f[COL_TS])
+    ax[1].set_title("ΔH vs TS")
 
-    ax.set_xlabel("Standard − Hardness (HRB)")
-    ax.set_ylabel("Elongation (%)")
-    ax.legend()
-    ax.grid(True)
+    ax[2].scatter(df_f["ΔH_LINE"], df_f[COL_EL])
+    ax[2].set_title("ΔH vs EL")
+
+    for a in ax:
+        a.axvline(7, linestyle="--", label="Typical limit")
+        a.set_xlabel("Standard − LINE Hardness")
+        a.grid(True)
 
     st.pyplot(fig)
 else:
-    st.info("ℹ️ Not enough data points for scatter plot (need ≥ 3 coils).")
+    st.info("Not enough data for relationship analysis")
 
 # =========================
 # SUMMARY TABLE
 # =========================
-st.subheader("📋 Summary")
+st.subheader("📋 Summary by Coils (Filtered Scope)")
 
-summary = (
-    df_g
-    .groupby("GROUP")
-    .agg(
-        Coil_Count=("GROUP", "count"),
-        LAB_P10=("ΔH_LAB", safe_p10),
-        LINE_P10=("ΔH_LINE", safe_p10),
-        LINE_LAB_MEAN=("LINE_MINUS_LAB", "mean"),
-        EL_MIN=("TENSILE_ELONG", "min")
-    )
-    .reset_index()
-)
+summary = df_f[[
+    "QUALITY_CODE",
+    "PRODUCT SPECIFICATION CODE",
+    "HR STEEL GRADE",
+    "ORDER GAUGE",
+    "TOP COATMASS",
+    COL_STD, COL_LAB, COL_LINE,
+    "ΔH_LINE",
+    COL_YS, COL_TS, COL_EL
+]]
 
 st.dataframe(summary, use_container_width=True)
 
 # =========================
-# CONCLUSION
+# INTERPRETATION
 # =========================
-st.subheader("🧠 Interpretation Logic")
+st.subheader("🧠 Engineering Interpretation")
 
 st.markdown("""
-- **LINE_P10 ≫ 7** → control is conservative  
-- **LINE_P10 ≈ 5–7** → control is reasonable  
-- **LINE_P10 < 5 + EL drop** → control is risky  
-
-⚠️ Limit must be defined **by material + thickness + coating**, not globally.
+- QUALITY_CODE defines **risk tolerance** – never mix across QC  
+- Thickness & coating strongly affect **cooling rate → hardness bias**
+- LINE hardness margin must protect **YS first, EL later**
+- One global −7 HRB limit is **technically incorrect**
 """)
