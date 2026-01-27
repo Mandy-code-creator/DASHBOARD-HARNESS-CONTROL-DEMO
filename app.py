@@ -1,206 +1,209 @@
-# =============================================================
-# HARDNESS & MECHANICAL PROPERTY CONTROL DASHBOARD
-# Streamlit – 5 Tabs | Robust Filters | No-empty logic
-# =============================================================
 import streamlit as st
 import pandas as pd
 import numpy as np
-import matplotlib.pyplot as plt
 
-st.set_page_config(page_title="Hardness Control Dashboard", layout="wide")
+# =========================
+# PAGE CONFIG
+# =========================
+st.set_page_config(page_title="GI Hardness Control", layout="wide")
 
-# =============================================================
-# DATA LOADING
-# =============================================================
+# =========================
+# LOAD DATA
+# =========================
 @st.cache_data
 def load_data():
     url = "https://docs.google.com/spreadsheets/d/1GdnY09hJ2qVHuEBAIJ-eU6B5z8ZdgcGf4P7ZjlAt4JI/export?format=csv"
     df = pd.read_csv(url)
 
-    # ---- normalize column names ----
-    df.columns = df.columns.str.strip()
+    # --- strip column names ---
+    df.columns = [c.strip() for c in df.columns]
 
-    numeric_cols = [
-        "Standard Hardness",
-        "HARDNESS 冶金",
-        "HARDNESS 鍍鋅線 N",
-        "HARDNESS 鍍鋅線 C",
-        "HARDNESS 鍍鋅線 S",
-        "TOP COATMASS",
+    # --- parse Standard Hardness: "56~62" ---
+    def parse_spec(x):
+        try:
+            if isinstance(x, str) and "~" in x:
+                a, b = x.split("~")
+                return float(a), float(b)
+        except:
+            pass
+        return np.nan, np.nan
+
+    df[["Hmin_spec", "Hmax_spec"]] = df["Standard Hardness"].apply(
+        lambda x: pd.Series(parse_spec(x))
+    )
+
+    df["Spec_status"] = np.where(
+        df["Hmin_spec"].isna() | df["Hmax_spec"].isna(),
+        "INVALID_SPEC",
+        "VALID_SPEC"
+    )
+
+    # --- numeric columns ---
+    num_cols = [
         "ORDER GAUGE",
+        "TOP COATMASS",
+        "HARDNESS 冶金",
+        "HARDNESS 鍍鋅線 C",
         "TENSILE_YIELD",
         "TENSILE_TENSILE",
-        "TENSILE_ELONG",
+        "TENSILE_ELONG"
     ]
-
-    for c in numeric_cols:
+    for c in num_cols:
         if c in df.columns:
             df[c] = pd.to_numeric(df[c], errors="coerce")
 
     return df
 
-
 df = load_data()
 
-# =============================================================
-# SIDEBAR FILTERS (NEVER EMPTY)
-# =============================================================
-st.sidebar.header("🔎 Filters")
+# =========================
+# SIDEBAR FILTERS (SAFE)
+# =========================
+st.sidebar.header("Filters")
 
-# ---- helper: safe multiselect ----
 def safe_multiselect(label, series):
     opts = sorted(series.dropna().unique().tolist())
-    if not opts:
+    if len(opts) == 0:
         return []
     return st.sidebar.multiselect(label, opts, default=opts)
 
-quality_sel = safe_multiselect("QUALITY_CODE", df["QUALITY_CODE"])
-material_sel = safe_multiselect("HR STEEL GRADE", df["HR STEEL GRADE"])
-standard_sel = safe_multiselect("Standard", df.get("冶金/ Standard", pd.Series()))
+f_quality = safe_multiselect("QUALITY_CODE", df["QUALITY_CODE"])
+f_spec    = safe_multiselect("PRODUCT SPECIFICATION CODE", df["PRODUCT SPECIFICATION CODE"])
+f_grade   = safe_multiselect("HR STEEL GRADE", df["HR STEEL GRADE"])
+f_gauge   = safe_multiselect("ORDER GAUGE", df["ORDER GAUGE"])
+f_coat    = safe_multiselect("TOP COATMASS", df["TOP COATMASS"])
 
-# coating by TOP COATMASS (grouped)
-if "TOP COATMASS" in df.columns:
-    coat_bins = pd.cut(df["TOP COATMASS"], bins=[0,50,100,150,200,300,1000])
-    df["COATING_GROUP"] = coat_bins.astype(str)
-else:
-    df["COATING_GROUP"] = "UNKNOWN"
+df_f = df[
+    df["QUALITY_CODE"].isin(f_quality)
+    & df["PRODUCT SPECIFICATION CODE"].isin(f_spec)
+    & df["HR STEEL GRADE"].isin(f_grade)
+    & df["ORDER GAUGE"].isin(f_gauge)
+    & df["TOP COATMASS"].isin(f_coat)
+]
 
-coating_sel = safe_multiselect("Coating (TOP COATMASS)", df["COATING_GROUP"])
-
-# thickness filter
-if "ORDER GAUGE" in df.columns:
-    g_min, g_max = float(df["ORDER GAUGE"].min()), float(df["ORDER GAUGE"].max())
-    gauge_range = st.sidebar.slider("Thickness (ORDER GAUGE)", g_min, g_max, (g_min, g_max))
-else:
-    gauge_range = None
-
-# =============================================================
-# APPLY FILTERS
-# =============================================================
-df_f = df.copy()
-
-if quality_sel:
-    df_f = df_f[df_f["QUALITY_CODE"].isin(quality_sel)]
-if material_sel:
-    df_f = df_f[df_f["HR STEEL GRADE"].isin(material_sel)]
-if standard_sel and "冶金/ Standard" in df_f.columns:
-    df_f = df_f[df_f["冶金/ Standard"].isin(standard_sel)]
-if coating_sel:
-    df_f = df_f[df_f["COATING_GROUP"].isin(coating_sel)]
-if gauge_range and "ORDER GAUGE" in df_f.columns:
-    df_f = df_f[(df_f["ORDER GAUGE"] >= gauge_range[0]) & (df_f["ORDER GAUGE"] <= gauge_range[1])]
-
-# ---- GUARANTEE NOT EMPTY ----
 if df_f.empty:
-    st.warning("⚠️ Filter too strict – showing full dataset")
+    st.warning("Filter too strict – fallback to full dataset")
     df_f = df.copy()
 
-# =============================================================
-# DERIVED METRICS (SAFE)
-# =============================================================
-if {"HARDNESS 冶金","Standard Hardness"}.issubset(df_f.columns):
-    df_f["ΔH_LAB"] = df_f["HARDNESS 冶金"] - df_f["Standard Hardness"]
-else:
-    df_f["ΔH_LAB"] = np.nan
+# =========================
+# DERIVED VALUES (ONLY VALID SPEC)
+# =========================
+df_v = df_f[df_f["Spec_status"] == "VALID_SPEC"].copy()
 
-# =============================================================
-# TABS LAYOUT (5 TABS)
-# =============================================================
-T1, T2, T3, T4, T5 = st.tabs([
-    "📊 Overview",
-    "🧪 Hardness Analysis",
-    "🏭 Material / Standard",
-    "🧮 Mechanical Properties",
-    "📋 Summary Tables",
+df_v["ΔH_LAB_high"]  = df_v["HARDNESS 冶金"] - df_v["Hmax_spec"]
+df_v["ΔH_LINE_high"] = df_v["HARDNESS 鍍鋅線 C"] - df_v["Hmax_spec"]
+df_v["ΔH_LINE_LAB"]  = df_v["HARDNESS 鍍鋅線 C"] - df_v["HARDNESS 冶金"]
+
+# =========================
+# TABS
+# =========================
+tab1, tab2, tab3, tab4, tab5 = st.tabs([
+    "Overview",
+    "Hardness",
+    "Mechanical",
+    "Group Summary",
+    "Spec Warning"
 ])
 
-# =============================================================
+# =========================
 # TAB 1 – OVERVIEW
-# =============================================================
-with T1:
-    st.subheader("Overall Snapshot")
+# =========================
+with tab1:
+    st.subheader("Overview")
 
-    c1, c2, c3 = st.columns(3)
+    col1, col2, col3 = st.columns(3)
 
-    if df_f["ΔH_LAB"].dropna().shape[0] > 0:
-        c1.metric("Mean ΔH LAB", f"{df_f['ΔH_LAB'].mean():.2f}")
-        c2.metric("P10 ΔH LAB", f"{np.percentile(df_f['ΔH_LAB'].dropna(),10):.2f}")
-        c3.metric("P90 ΔH LAB", f"{np.percentile(df_f['ΔH_LAB'].dropna(),90):.2f}")
-    else:
-        st.info("Not enough hardness data")
+    col1.metric("Total Coils", len(df_f))
+    col2.metric("Valid Spec", (df_f["Spec_status"] == "VALID_SPEC").sum())
+    col3.metric("Invalid Spec", (df_f["Spec_status"] == "INVALID_SPEC").sum())
 
-# =============================================================
-# TAB 2 – HARDNESS ANALYSIS
-# =============================================================
-with T2:
-    st.subheader("Hardness vs Coating & Thickness")
+    if len(df_v) > 0:
+        p10 = np.percentile(df_v["ΔH_LINE_high"].dropna(), 10)
+        st.metric("LINE ΔH vs Hmax (P10)", f"{p10:.2f} HRB")
 
-    fig, ax = plt.subplots()
-    ax.scatter(df_f["TOP COATMASS"], df_f["HARDNESS 冶金"], alpha=0.6)
-    ax.set_xlabel("TOP COATMASS")
-    ax.set_ylabel("HARDNESS 冶金")
-    st.pyplot(fig)
+# =========================
+# TAB 2 – HARDNESS
+# =========================
+with tab2:
+    st.subheader("Hardness Analysis (VALID SPEC ONLY)")
 
-# =============================================================
-# TAB 3 – MATERIAL / STANDARD RELATION
-# =============================================================
-with T3:
-    st.subheader("Material × Standard × Thickness")
+    show_cols = [
+        "QUALITY_CODE",
+        "PRODUCT SPECIFICATION CODE",
+        "HR STEEL GRADE",
+        "ORDER GAUGE",
+        "TOP COATMASS",
+        "Hmin_spec",
+        "Hmax_spec",
+        "HARDNESS 冶金",
+        "HARDNESS 鍍鋅線 C",
+        "ΔH_LAB_high",
+        "ΔH_LINE_high",
+        "ΔH_LINE_LAB"
+    ]
+    st.dataframe(df_v[show_cols])
 
-    grp = (
-        df_f.groupby([
-            "QUALITY_CODE",
-            "HR STEEL GRADE",
-            "冶金/ Standard",
-            "COATING_GROUP",
-        ])
-        .agg(
-            Mean_H_LAB=("HARDNESS 冶金","mean"),
-            Mean_H_LINE=("HARDNESS 鍍鋅線 N","mean"),
-            Count=("HARDNESS 冶金","count"),
-        )
-        .reset_index()
-    )
+# =========================
+# TAB 3 – MECHANICAL
+# =========================
+with tab3:
+    st.subheader("Mechanical Properties")
 
-    st.dataframe(grp)
+    mech_cols = [
+        "QUALITY_CODE",
+        "ORDER GAUGE",
+        "TOP COATMASS",
+        "HARDNESS 鍍鋅線 C",
+        "TENSILE_YIELD",
+        "TENSILE_TENSILE",
+        "TENSILE_ELONG"
+    ]
+    st.dataframe(df_v[mech_cols])
 
-# =============================================================
-# TAB 4 – MECHANICAL PROPERTIES
-# =============================================================
-with T4:
-    st.subheader("Tensile Properties")
+# =========================
+# TAB 4 – GROUP SUMMARY
+# =========================
+with tab4:
+    st.subheader("Group Mean Summary")
 
-    cols = ["TENSILE_YIELD","TENSILE_TENSILE","TENSILE_ELONG"]
-    for c in cols:
-        if c in df_f.columns:
-            fig, ax = plt.subplots()
-            ax.hist(df_f[c].dropna(), bins=20)
-            ax.set_title(c)
-            st.pyplot(fig)
-
-# =============================================================
-# TAB 5 – SUMMARY TABLES
-# =============================================================
-with T5:
-    st.subheader("Mean Hardness Table")
+    group_cols = [
+        "QUALITY_CODE",
+        "PRODUCT SPECIFICATION CODE",
+        "HR STEEL GRADE",
+        "ORDER GAUGE",
+        "TOP COATMASS"
+    ]
 
     summary = (
-        df_f.groupby([
-            "QUALITY_CODE",
-            "HR STEEL GRADE",
-            "冶金/ Standard",
-            "ORDER GAUGE",
-            "COATING_GROUP",
-        ])
+        df_v
+        .groupby(group_cols)
         .agg(
-            Mean_H_LAB=("HARDNESS 冶金","mean"),
-            Mean_H_LINE=("HARDNESS 鍍鋅線 N","mean"),
-            Mean_YS=("TENSILE_YIELD","mean"),
-            Mean_TS=("TENSILE_TENSILE","mean"),
-            Mean_EL=("TENSILE_ELONG","mean"),
-            Count=("HARDNESS 冶金","count"),
+            coils=("HARDNESS 冶金", "count"),
+            H_LAB_mean=("HARDNESS 冶金", "mean"),
+            H_LINE_mean=("HARDNESS 鍍鋅線 C", "mean"),
+            ΔH_LINE_P10=("ΔH_LINE_high", lambda x: np.percentile(x.dropna(), 10) if len(x.dropna()) > 0 else np.nan),
+            YS_mean=("TENSILE_YIELD", "mean"),
+            TS_mean=("TENSILE_TENSILE", "mean"),
+            EL_mean=("TENSILE_ELONG", "mean")
         )
         .reset_index()
     )
 
     st.dataframe(summary)
+
+# =========================
+# TAB 5 – SPEC WARNING
+# =========================
+with tab5:
+    st.subheader("INVALID STANDARD HARDNESS")
+
+    warn_cols = [
+        "QUALITY_CODE",
+        "PRODUCT SPECIFICATION CODE",
+        "HR STEEL GRADE",
+        "ORDER GAUGE",
+        "TOP COATMASS",
+        "Standard Hardness"
+    ]
+
+    st.dataframe(df_f[df_f["Spec_status"] == "INVALID_SPEC"][warn_cols])
