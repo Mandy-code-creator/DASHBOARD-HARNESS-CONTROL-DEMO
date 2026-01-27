@@ -37,28 +37,27 @@ df.columns = (
 # =========================
 # AUTO FIND COLUMNS
 # =========================
-def find_col(keyword_list):
+def find_col(keywords):
     for c in df.columns:
-        for k in keyword_list:
+        for k in keywords:
             if k.lower() in c.lower():
                 return c
     return None
 
 COL_STANDARD = find_col(["standard hardness"])
 COL_LAB = find_col(["冶金"])
-COL_LINE = find_col(["鍍鋅線", "galvanizing", "line c"])
+COL_LINE = find_col(["鍍鋅線", "galvan"])
 
 # =========================
 # CHECK
 # =========================
 if not all([COL_STANDARD, COL_LAB, COL_LINE]):
     st.error("❌ Cannot auto-detect hardness columns")
-    st.write("Detected columns:")
     st.write(df.columns.tolist())
     st.stop()
 
 # =========================
-# REQUIRED PROCESS COLUMNS
+# REQUIRED
 # =========================
 required_cols = [
     "HR STEEL GRADE",
@@ -93,7 +92,7 @@ df["GROUP"] = (
 )
 
 # =========================
-# CALCULATE DELTA
+# DELTA
 # =========================
 df["ΔH_LAB"] = df[COL_STANDARD] - df[COL_LAB]
 df["ΔH_LINE"] = df[COL_STANDARD] - df[COL_LINE]
@@ -103,13 +102,21 @@ df["LINE_MINUS_LAB"] = df[COL_LINE] - df[COL_LAB]
 # SIDEBAR
 # =========================
 st.sidebar.header("Filter")
-
 group_selected = st.sidebar.selectbox(
     "Select Group",
     sorted(df["GROUP"].unique())
 )
 
 df_g = df[df["GROUP"] == group_selected]
+
+# =========================
+# SAFE PERCENTILE FUNCTION
+# =========================
+def safe_p10(series):
+    series = series.dropna()
+    if len(series) < 3:
+        return np.nan
+    return np.percentile(series, 10)
 
 # =========================
 # KPI
@@ -119,32 +126,40 @@ st.subheader("📊 Key Statistics")
 c1, c2, c3 = st.columns(3)
 
 with c1:
-    st.metric("ΔH LAB (P10)", f"{np.percentile(df_g['ΔH_LAB'],10):.2f}")
+    val = safe_p10(df_g["ΔH_LAB"])
+    st.metric("ΔH LAB (P10)", "N/A" if pd.isna(val) else f"{val:.2f}")
 
 with c2:
-    st.metric("ΔH LINE (P10)", f"{np.percentile(df_g['ΔH_LINE'],10):.2f}")
+    val = safe_p10(df_g["ΔH_LINE"])
+    st.metric("ΔH LINE (P10)", "N/A" if pd.isna(val) else f"{val:.2f}")
 
 with c3:
-    st.metric("LINE − LAB Mean", f"{df_g['LINE_MINUS_LAB'].mean():.2f}")
+    if df_g.empty:
+        st.metric("LINE − LAB Mean", "N/A")
+    else:
+        st.metric("LINE − LAB Mean", f"{df_g['LINE_MINUS_LAB'].mean():.2f}")
 
 # =========================
 # SCATTER
 # =========================
 st.subheader("🔍 Hardness Margin vs Elongation")
 
-fig, ax = plt.subplots(figsize=(9,5))
+if len(df_g) >= 3:
+    fig, ax = plt.subplots(figsize=(9,5))
 
-ax.scatter(df_g["ΔH_LINE"], df_g["TENSILE_ELONG"], label="LINE", alpha=0.7)
-ax.scatter(df_g["ΔH_LAB"], df_g["TENSILE_ELONG"], label="LAB", alpha=0.7)
+    ax.scatter(df_g["ΔH_LINE"], df_g["TENSILE_ELONG"], label="LINE", alpha=0.7)
+    ax.scatter(df_g["ΔH_LAB"], df_g["TENSILE_ELONG"], label="LAB", alpha=0.7)
 
-ax.axvline(7, linestyle="--", label="Current control = 7 HRB")
+    ax.axvline(7, linestyle="--", label="Current control = 7 HRB")
 
-ax.set_xlabel("Standard − Hardness (HRB)")
-ax.set_ylabel("Elongation (%)")
-ax.legend()
-ax.grid(True)
+    ax.set_xlabel("Standard − Hardness (HRB)")
+    ax.set_ylabel("Elongation (%)")
+    ax.legend()
+    ax.grid(True)
 
-st.pyplot(fig)
+    st.pyplot(fig)
+else:
+    st.info("ℹ️ Not enough data points for scatter plot (need ≥ 3 coils).")
 
 # =========================
 # SUMMARY TABLE
@@ -156,8 +171,8 @@ summary = (
     .groupby("GROUP")
     .agg(
         Coil_Count=("GROUP", "count"),
-        LAB_P10=("ΔH_LAB", lambda x: np.percentile(x,10)),
-        LINE_P10=("ΔH_LINE", lambda x: np.percentile(x,10)),
+        LAB_P10=("ΔH_LAB", safe_p10),
+        LINE_P10=("ΔH_LINE", safe_p10),
         LINE_LAB_MEAN=("LINE_MINUS_LAB", "mean"),
         EL_MIN=("TENSILE_ELONG", "min")
     )
@@ -172,9 +187,9 @@ st.dataframe(summary, use_container_width=True)
 st.subheader("🧠 Interpretation Logic")
 
 st.markdown("""
-- **LINE_P10 ≫ 7** → current limit is conservative  
-- **LINE_P10 ≈ 5–7** → current limit is reasonable  
-- **LINE_P10 < 5 + EL drop** → current limit is risky  
+- **LINE_P10 ≫ 7** → control is conservative  
+- **LINE_P10 ≈ 5–7** → control is reasonable  
+- **LINE_P10 < 5 + EL drop** → control is risky  
 
-⚠️ Always control **by group (material + thickness + coating)**, not globally.
+⚠️ Limit must be defined **by material + thickness + coating**, not globally.
 """)
