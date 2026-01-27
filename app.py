@@ -4,12 +4,12 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 st.set_page_config(
-    page_title="Hardness & Mechanical Property Control",
+    page_title="Hardness & Mechanical Control Dashboard",
     layout="wide"
 )
 
 # =========================
-# UTIL FUNCTIONS
+# SAFE STAT FUNCTIONS
 # =========================
 def safe_percentile(series, q):
     s = series.dropna()
@@ -31,8 +31,10 @@ def load_data():
     url = "https://docs.google.com/spreadsheets/d/1GdnY09hJ2qVHuEBAIJ-eU6B5z8ZdgcGf4P7ZjlAt4JI/export?format=csv"
     df = pd.read_csv(url)
 
+    # clean column names
     df.columns = [c.strip() for c in df.columns]
 
+    # numeric columns ONLY (TOP COATMASS IS NOT HERE!)
     num_cols = [
         "Standard Hardness",
         "HARDNESS 冶金",
@@ -43,43 +45,47 @@ def load_data():
         "TENSILE_TENSILE",
         "TENSILE_ELONG",
         "ORDER GAUGE",
-        "TOP COATMASS"
     ]
 
     for c in num_cols:
         if c in df.columns:
             df[c] = pd.to_numeric(df[c], errors="coerce")
 
+    # 🔥 COATING: keep category + extract numeric
+    df["TOP COATMASS"] = df["TOP COATMASS"].astype(str).str.strip()
+
+    df["COATING_MASS_NUM"] = (
+        df["TOP COATMASS"]
+        .str.extract(r"(\d+)")
+        .astype(float)
+    )
+
     return df
 
 df0 = load_data()
 
 # =========================
-# SIDEBAR FILTERS (SAFE)
+# SIDEBAR FILTERS (ROBUST)
 # =========================
 st.sidebar.header("🔎 Hierarchical Filters")
 
 df_f = df0.copy()
 
 def apply_filter(df_base, df_current, col, label):
-    df_base[col] = df_base[col].astype(str)
-    df_current[col] = df_current[col].astype(str)
-
     options = sorted(df_base[col].dropna().unique())
     selected = st.sidebar.multiselect(label, options, default=options)
-
     return df_current[df_current[col].isin(selected)]
 
 df_f = apply_filter(df0, df_f, "QUALITY_CODE", "QUALITY CODE")
 df_f = apply_filter(df0, df_f, "PRODUCT SPECIFICATION CODE", "STANDARD")
 df_f = apply_filter(df0, df_f, "HR STEEL GRADE", "MATERIAL")
 df_f = apply_filter(df0, df_f, "ORDER GAUGE", "THICKNESS")
-df_f = apply_filter(df0, df_f, "TOP COATMASS", "COATING")
+df_f = apply_filter(df0, df_f, "TOP COATMASS", "COATING TYPE")
 
 st.sidebar.write("✅ Rows after filter:", len(df_f))
 
 if df_f.empty:
-    st.error("❌ No data after filtering – this combination does not exist")
+    st.error("❌ No data after filtering – combination does not exist")
     st.stop()
 
 # =========================
@@ -97,7 +103,7 @@ tab1, tab2, tab3, tab4, tab5 = st.tabs([
     "1️⃣ Overview",
     "2️⃣ Hardness Analysis",
     "3️⃣ Mechanical Properties",
-    "4️⃣ Thickness / Coating / Material",
+    "4️⃣ Thickness & Coating Effect",
     "5️⃣ Control Suggestion"
 ])
 
@@ -127,14 +133,10 @@ with tab1:
 with tab2:
     st.subheader("Hardness vs Standard (LAB)")
 
-    if df_f["ΔH_LAB"].dropna().shape[0] < 3:
-        st.warning("⚠️ Sample size too small for statistical analysis")
-
     fig, ax = plt.subplots()
     ax.hist(df_f["ΔH_LAB"].dropna(), bins=20)
     ax.axvline(0, linestyle="--")
     ax.set_xlabel("ΔH (LAB - Standard)")
-    ax.set_ylabel("Count")
     st.pyplot(fig)
 
     p10 = safe_percentile(df_f["ΔH_LAB"], 10)
@@ -159,16 +161,23 @@ with tab3:
     st.write(df_f[["TENSILE_YIELD", "TENSILE_TENSILE", "TENSILE_ELONG"]].describe())
 
 # =========================
-# TAB 4 – EFFECT ANALYSIS
+# TAB 4 – THICKNESS & COATING
 # =========================
 with tab4:
-    st.subheader("Thickness / Coating / Material Effect")
+    st.subheader("Thickness & Coating Effect on Hardness")
 
     fig, ax = plt.subplots()
-    ax.scatter(df_f["ORDER GAUGE"], df_f["HARDNESS 冶金"], alpha=0.7)
+    ax.scatter(
+        df_f["ORDER GAUGE"],
+        df_f["HARDNESS 冶金"],
+        c=df_f["COATING_MASS_NUM"],
+        alpha=0.7
+    )
     ax.set_xlabel("Thickness")
     ax.set_ylabel("LAB Hardness")
     st.pyplot(fig)
+
+    st.caption("Color scale represents coating mass (numeric extract)")
 
 # =========================
 # TAB 5 – CONTROL LOGIC
@@ -187,4 +196,4 @@ with tab5:
     elif 5 <= p10_h <= 7:
         st.warning("🟡 Control is reasonable")
     else:
-        st.error("🔴 Control is risky – limit must be tightened by material / thickness / coating")
+        st.error("🔴 Control is risky – define limit by material / thickness / coating")
