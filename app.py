@@ -1,199 +1,206 @@
+# =============================================================
+# HARDNESS & MECHANICAL PROPERTY CONTROL DASHBOARD
+# Streamlit – 5 Tabs | Robust Filters | No-empty logic
+# =============================================================
 import streamlit as st
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 
-st.set_page_config(
-    page_title="Hardness & Mechanical Control Dashboard",
-    layout="wide"
-)
+st.set_page_config(page_title="Hardness Control Dashboard", layout="wide")
 
-# =========================
-# SAFE STAT FUNCTIONS
-# =========================
-def safe_percentile(series, q):
-    s = series.dropna()
-    if len(s) == 0:
-        return None
-    return np.percentile(s, q)
-
-def safe_mean(series):
-    s = series.dropna()
-    if len(s) == 0:
-        return None
-    return s.mean()
-
-# =========================
-# LOAD DATA
-# =========================
+# =============================================================
+# DATA LOADING
+# =============================================================
 @st.cache_data
 def load_data():
     url = "https://docs.google.com/spreadsheets/d/1GdnY09hJ2qVHuEBAIJ-eU6B5z8ZdgcGf4P7ZjlAt4JI/export?format=csv"
     df = pd.read_csv(url)
 
-    # clean column names
-    df.columns = [c.strip() for c in df.columns]
+    # ---- normalize column names ----
+    df.columns = df.columns.str.strip()
 
-    # numeric columns ONLY (TOP COATMASS IS NOT HERE!)
-    num_cols = [
+    numeric_cols = [
         "Standard Hardness",
         "HARDNESS 冶金",
         "HARDNESS 鍍鋅線 N",
         "HARDNESS 鍍鋅線 C",
         "HARDNESS 鍍鋅線 S",
+        "TOP COATMASS",
+        "ORDER GAUGE",
         "TENSILE_YIELD",
         "TENSILE_TENSILE",
         "TENSILE_ELONG",
-        "ORDER GAUGE",
     ]
 
-    for c in num_cols:
+    for c in numeric_cols:
         if c in df.columns:
             df[c] = pd.to_numeric(df[c], errors="coerce")
 
-    # 🔥 COATING: keep category + extract numeric
-    df["TOP COATMASS"] = df["TOP COATMASS"].astype(str).str.strip()
-
-    df["COATING_MASS_NUM"] = (
-        df["TOP COATMASS"]
-        .str.extract(r"(\d+)")
-        .astype(float)
-    )
-
     return df
 
-df0 = load_data()
 
-# =========================
-# SIDEBAR FILTERS (ROBUST)
-# =========================
-st.sidebar.header("🔎 Hierarchical Filters")
+df = load_data()
 
-df_f = df0.copy()
+# =============================================================
+# SIDEBAR FILTERS (NEVER EMPTY)
+# =============================================================
+st.sidebar.header("🔎 Filters")
 
-def apply_filter(df_base, df_current, col, label):
-    options = sorted(df_base[col].dropna().unique())
-    selected = st.sidebar.multiselect(label, options, default=options)
-    return df_current[df_current[col].isin(selected)]
+# ---- helper: safe multiselect ----
+def safe_multiselect(label, series):
+    opts = sorted(series.dropna().unique().tolist())
+    if not opts:
+        return []
+    return st.sidebar.multiselect(label, opts, default=opts)
 
-df_f = apply_filter(df0, df_f, "QUALITY_CODE", "QUALITY CODE")
-df_f = apply_filter(df0, df_f, "PRODUCT SPECIFICATION CODE", "STANDARD")
-df_f = apply_filter(df0, df_f, "HR STEEL GRADE", "MATERIAL")
-df_f = apply_filter(df0, df_f, "ORDER GAUGE", "THICKNESS")
-df_f = apply_filter(df0, df_f, "TOP COATMASS", "COATING TYPE")
+quality_sel = safe_multiselect("QUALITY_CODE", df["QUALITY_CODE"])
+material_sel = safe_multiselect("HR STEEL GRADE", df["HR STEEL GRADE"])
+standard_sel = safe_multiselect("Standard", df.get("冶金/ Standard", pd.Series()))
 
-st.sidebar.write("✅ Rows after filter:", len(df_f))
+# coating by TOP COATMASS (grouped)
+if "TOP COATMASS" in df.columns:
+    coat_bins = pd.cut(df["TOP COATMASS"], bins=[0,50,100,150,200,300,1000])
+    df["COATING_GROUP"] = coat_bins.astype(str)
+else:
+    df["COATING_GROUP"] = "UNKNOWN"
 
+coating_sel = safe_multiselect("Coating (TOP COATMASS)", df["COATING_GROUP"])
+
+# thickness filter
+if "ORDER GAUGE" in df.columns:
+    g_min, g_max = float(df["ORDER GAUGE"].min()), float(df["ORDER GAUGE"].max())
+    gauge_range = st.sidebar.slider("Thickness (ORDER GAUGE)", g_min, g_max, (g_min, g_max))
+else:
+    gauge_range = None
+
+# =============================================================
+# APPLY FILTERS
+# =============================================================
+df_f = df.copy()
+
+if quality_sel:
+    df_f = df_f[df_f["QUALITY_CODE"].isin(quality_sel)]
+if material_sel:
+    df_f = df_f[df_f["HR STEEL GRADE"].isin(material_sel)]
+if standard_sel and "冶金/ Standard" in df_f.columns:
+    df_f = df_f[df_f["冶金/ Standard"].isin(standard_sel)]
+if coating_sel:
+    df_f = df_f[df_f["COATING_GROUP"].isin(coating_sel)]
+if gauge_range and "ORDER GAUGE" in df_f.columns:
+    df_f = df_f[(df_f["ORDER GAUGE"] >= gauge_range[0]) & (df_f["ORDER GAUGE"] <= gauge_range[1])]
+
+# ---- GUARANTEE NOT EMPTY ----
 if df_f.empty:
-    st.error("❌ No data after filtering – combination does not exist")
-    st.stop()
+    st.warning("⚠️ Filter too strict – showing full dataset")
+    df_f = df.copy()
 
-# =========================
-# CALCULATION
-# =========================
-df_f["ΔH_LAB"] = df_f["HARDNESS 冶金"] - df_f["Standard Hardness"]
-df_f["ΔH_LINE_N"] = df_f["HARDNESS 鍍鋅線 N"] - df_f["Standard Hardness"]
-df_f["ΔH_LINE_C"] = df_f["HARDNESS 鍍鋅線 C"] - df_f["Standard Hardness"]
-df_f["ΔH_LINE_S"] = df_f["HARDNESS 鍍鋅線 S"] - df_f["Standard Hardness"]
+# =============================================================
+# DERIVED METRICS (SAFE)
+# =============================================================
+if {"HARDNESS 冶金","Standard Hardness"}.issubset(df_f.columns):
+    df_f["ΔH_LAB"] = df_f["HARDNESS 冶金"] - df_f["Standard Hardness"]
+else:
+    df_f["ΔH_LAB"] = np.nan
 
-# =========================
-# TABS
-# =========================
-tab1, tab2, tab3, tab4, tab5 = st.tabs([
-    "1️⃣ Overview",
-    "2️⃣ Hardness Analysis",
-    "3️⃣ Mechanical Properties",
-    "4️⃣ Thickness & Coating Effect",
-    "5️⃣ Control Suggestion"
+# =============================================================
+# TABS LAYOUT (5 TABS)
+# =============================================================
+T1, T2, T3, T4, T5 = st.tabs([
+    "📊 Overview",
+    "🧪 Hardness Analysis",
+    "🏭 Material / Standard",
+    "🧮 Mechanical Properties",
+    "📋 Summary Tables",
 ])
 
-# =========================
+# =============================================================
 # TAB 1 – OVERVIEW
-# =========================
-with tab1:
-    st.subheader("Dataset Overview")
-    st.dataframe(df_f, use_container_width=True)
+# =============================================================
+with T1:
+    st.subheader("Overall Snapshot")
 
     c1, c2, c3 = st.columns(3)
-    c1.metric("Samples", len(df_f))
-    c2.metric(
-        "Mean Std Hardness",
-        f"{safe_mean(df_f['Standard Hardness']):.1f}"
-        if safe_mean(df_f['Standard Hardness']) is not None else "N/A"
-    )
-    c3.metric(
-        "Mean LAB Hardness",
-        f"{safe_mean(df_f['HARDNESS 冶金']):.1f}"
-        if safe_mean(df_f['HARDNESS 冶金']) is not None else "N/A"
-    )
 
-# =========================
-# TAB 2 – HARDNESS
-# =========================
-with tab2:
-    st.subheader("Hardness vs Standard (LAB)")
-
-    fig, ax = plt.subplots()
-    ax.hist(df_f["ΔH_LAB"].dropna(), bins=20)
-    ax.axvline(0, linestyle="--")
-    ax.set_xlabel("ΔH (LAB - Standard)")
-    st.pyplot(fig)
-
-    p10 = safe_percentile(df_f["ΔH_LAB"], 10)
-    p90 = safe_percentile(df_f["ΔH_LAB"], 90)
-    mean_dh = safe_mean(df_f["ΔH_LAB"])
-
-    c1, c2, c3 = st.columns(3)
-    c1.metric("ΔH LAB Mean", f"{mean_dh:.2f}" if mean_dh is not None else "N/A")
-    c2.metric("ΔH LAB P10", f"{p10:.2f}" if p10 is not None else "N/A")
-    c3.metric("ΔH LAB P90", f"{p90:.2f}" if p90 is not None else "N/A")
-
-# =========================
-# TAB 3 – MECHANICAL
-# =========================
-with tab3:
-    st.subheader("Mechanical Properties (YS / TS / EL)")
-
-    fig, ax = plt.subplots()
-    df_f[["TENSILE_YIELD", "TENSILE_TENSILE", "TENSILE_ELONG"]].boxplot(ax=ax)
-    st.pyplot(fig)
-
-    st.write(df_f[["TENSILE_YIELD", "TENSILE_TENSILE", "TENSILE_ELONG"]].describe())
-
-# =========================
-# TAB 4 – THICKNESS & COATING
-# =========================
-with tab4:
-    st.subheader("Thickness & Coating Effect on Hardness")
-
-    fig, ax = plt.subplots()
-    ax.scatter(
-        df_f["ORDER GAUGE"],
-        df_f["HARDNESS 冶金"],
-        c=df_f["COATING_MASS_NUM"],
-        alpha=0.7
-    )
-    ax.set_xlabel("Thickness")
-    ax.set_ylabel("LAB Hardness")
-    st.pyplot(fig)
-
-    st.caption("Color scale represents coating mass (numeric extract)")
-
-# =========================
-# TAB 5 – CONTROL LOGIC
-# =========================
-with tab5:
-    st.subheader("Hardness Control Suggestion")
-
-    p10_h = safe_percentile(df_f["HARDNESS 冶金"], 10)
-
-    st.write("**LAB Hardness P10:**", f"{p10_h:.1f}" if p10_h is not None else "N/A")
-
-    if p10_h is None:
-        st.warning("⚠️ Not enough data to judge control limit")
-    elif p10_h > 7:
-        st.success("🟢 Control is conservative")
-    elif 5 <= p10_h <= 7:
-        st.warning("🟡 Control is reasonable")
+    if df_f["ΔH_LAB"].dropna().shape[0] > 0:
+        c1.metric("Mean ΔH LAB", f"{df_f['ΔH_LAB'].mean():.2f}")
+        c2.metric("P10 ΔH LAB", f"{np.percentile(df_f['ΔH_LAB'].dropna(),10):.2f}")
+        c3.metric("P90 ΔH LAB", f"{np.percentile(df_f['ΔH_LAB'].dropna(),90):.2f}")
     else:
-        st.error("🔴 Control is risky – define limit by material / thickness / coating")
+        st.info("Not enough hardness data")
+
+# =============================================================
+# TAB 2 – HARDNESS ANALYSIS
+# =============================================================
+with T2:
+    st.subheader("Hardness vs Coating & Thickness")
+
+    fig, ax = plt.subplots()
+    ax.scatter(df_f["TOP COATMASS"], df_f["HARDNESS 冶金"], alpha=0.6)
+    ax.set_xlabel("TOP COATMASS")
+    ax.set_ylabel("HARDNESS 冶金")
+    st.pyplot(fig)
+
+# =============================================================
+# TAB 3 – MATERIAL / STANDARD RELATION
+# =============================================================
+with T3:
+    st.subheader("Material × Standard × Thickness")
+
+    grp = (
+        df_f.groupby([
+            "QUALITY_CODE",
+            "HR STEEL GRADE",
+            "冶金/ Standard",
+            "COATING_GROUP",
+        ])
+        .agg(
+            Mean_H_LAB=("HARDNESS 冶金","mean"),
+            Mean_H_LINE=("HARDNESS 鍍鋅線 N","mean"),
+            Count=("HARDNESS 冶金","count"),
+        )
+        .reset_index()
+    )
+
+    st.dataframe(grp)
+
+# =============================================================
+# TAB 4 – MECHANICAL PROPERTIES
+# =============================================================
+with T4:
+    st.subheader("Tensile Properties")
+
+    cols = ["TENSILE_YIELD","TENSILE_TENSILE","TENSILE_ELONG"]
+    for c in cols:
+        if c in df_f.columns:
+            fig, ax = plt.subplots()
+            ax.hist(df_f[c].dropna(), bins=20)
+            ax.set_title(c)
+            st.pyplot(fig)
+
+# =============================================================
+# TAB 5 – SUMMARY TABLES
+# =============================================================
+with T5:
+    st.subheader("Mean Hardness Table")
+
+    summary = (
+        df_f.groupby([
+            "QUALITY_CODE",
+            "HR STEEL GRADE",
+            "冶金/ Standard",
+            "ORDER GAUGE",
+            "COATING_GROUP",
+        ])
+        .agg(
+            Mean_H_LAB=("HARDNESS 冶金","mean"),
+            Mean_H_LINE=("HARDNESS 鍍鋅線 N","mean"),
+            Mean_YS=("TENSILE_YIELD","mean"),
+            Mean_TS=("TENSILE_TENSILE","mean"),
+            Mean_EL=("TENSILE_ELONG","mean"),
+            Count=("HARDNESS 冶金","count"),
+        )
+        .reset_index()
+    )
+
+    st.dataframe(summary)
