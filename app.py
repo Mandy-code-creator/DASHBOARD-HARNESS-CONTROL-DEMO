@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
+import matplotlib.pyplot as plt
 
 # =========================
 # PAGE CONFIG
@@ -10,154 +11,172 @@ st.set_page_config(
     layout="wide"
 )
 
-st.title("GI Hardness & Mechanical Property Dashboard")
+st.title("GI HARDNESS CONTROL – LAB vs LINE vs STANDARD")
 
 # =========================
-# LOAD DATA FROM GOOGLE SHEET
+# LOAD DATA
 # =========================
+DATA_URL = "https://docs.google.com/spreadsheets/d/1GdnY09hJ2qVHuEBAIJ-eU6B5z8ZdgcGf4P7ZjlAt4JI/export?format=csv"
+
 @st.cache_data
-def load_data():
-    SHEET_ID = "PUT_YOUR_SHEET_ID_HERE"
-    url = f"https://docs.google.com/spreadsheets/d/1GdnY09hJ2qVHuEBAIJ-eU6B5z8ZdgcGf4P7ZjlAt4JI/export?format=csv"
-    df = pd.read_csv(url)
-    return df
+def load_data(url):
+    return pd.read_csv(url)
 
-df = load_data()
+df = load_data(DATA_URL)
 
 # =========================
-# CLEAN COLUMN NAMES (CRITICAL)
+# CLEAN COLUMN NAMES
 # =========================
-df.columns = (
-    df.columns
-    .astype(str)
-    .str.replace("\n", " ", regex=False)
-    .str.replace("  ", " ", regex=False)
-    .str.strip()
+df.columns = df.columns.str.strip()
+
+# =========================
+# COLUMN DEFINITIONS
+# =========================
+COL_STANDARD = "Standard Hardness"
+COL_LAB = "HARDNESS\n冶金"
+COL_LINE_C = "HARDNESS\n鍍鋅線\nC"
+
+# =========================
+# BASIC CHECK
+# =========================
+required_cols = [
+    "HR STEEL GRADE",
+    "ORDER GAUGE",
+    "TOP COATMASS",
+    COL_STANDARD,
+    COL_LAB,
+    COL_LINE_C,
+    "TENSILE_ELONG"
+]
+
+missing = [c for c in required_cols if c not in df.columns]
+
+if missing:
+    st.error(f"❌ Missing columns: {missing}")
+    st.stop()
+
+# =========================
+# DATA TYPE
+# =========================
+for c in [COL_STANDARD, COL_LAB, COL_LINE_C, "TENSILE_ELONG"]:
+    df[c] = pd.to_numeric(df[c], errors="coerce")
+
+df = df.dropna(subset=[COL_STANDARD, COL_LAB, COL_LINE_C])
+
+# =========================
+# CREATE GROUP
+# =========================
+df["GROUP"] = (
+    df["HR STEEL GRADE"].astype(str) + " | " +
+    df["ORDER GAUGE"].astype(str) + "mm | " +
+    df["TOP COATMASS"].astype(str)
 )
 
-st.subheader("Column names (debug)")
-st.write(df.columns.tolist())
+# =========================
+# CALCULATE DELTA
+# =========================
+df["ΔH_LAB"] = df[COL_STANDARD] - df[COL_LAB]
+df["ΔH_LINE"] = df[COL_STANDARD] - df[COL_LINE_C]
+df["LINE_MINUS_LAB"] = df[COL_LINE_C] - df[COL_LAB]
 
 # =========================
-# AUTO FIND HARDNESS COLUMNS
+# SIDEBAR FILTER
 # =========================
-lab_col = [c for c in df.columns if "HARDNESS" in c and "冶金" in c]
-line_col = [c for c in df.columns if "HARDNESS" in c and "鍍鋅線" in c and "C" in c]
+st.sidebar.header("Filter")
 
-spec_col = [c for c in df.columns if "Standard" in c and "Hardness" in c]
-
-if not lab_col:
-    st.error("❌ Không tìm thấy cột HARDNESS 冶金 (LAB)")
-    st.stop()
-
-if not line_col:
-    st.error("❌ Không tìm thấy cột HARDNESS 鍍鋅線 C (LINE)")
-    st.stop()
-
-if not spec_col:
-    st.error("❌ Không tìm thấy cột Standard Hardness")
-    st.stop()
-
-hardness_map = {
-    "LAB – 冶金 (center)": lab_col[0],
-    "LINE – GI (center C)": line_col[0],
-}
-
-# =========================
-# SIDEBAR
-# =========================
-st.sidebar.header("Settings")
-
-hardness_label = st.sidebar.radio(
-    "Hardness source",
-    list(hardness_map.keys())
+group_selected = st.sidebar.selectbox(
+    "Select Group",
+    sorted(df["GROUP"].unique())
 )
 
-HARDNESS = df[hardness_map[hardness_label]]
-HMAX = df[spec_col[0]]
-
-# =========================
-# NUMERIC SAFETY
-# =========================
-HARDNESS = pd.to_numeric(HARDNESS, errors="coerce")
-HMAX = pd.to_numeric(HMAX, errors="coerce")
-
-# =========================
-# CORE ANALYSIS
-# =========================
-df["ΔH_spec"] = HMAX - HARDNESS
-
-def hardness_band(x):
-    if pd.isna(x):
-        return "NA"
-    elif x >= 10:
-        return "≥10"
-    elif x >= 7:
-        return "7–10"
-    elif x >= 5:
-        return "5–7"
-    elif x >= 3:
-        return "3–5"
-    else:
-        return "<3"
-
-df["Hardness_Band"] = df["ΔH_spec"].apply(hardness_band)
-
-def decision_zone(x):
-    if pd.isna(x):
-        return "NA"
-    elif x >= 7:
-        return "SAFE"
-    elif x >= 5:
-        return "WATCH"
-    else:
-        return "RISK"
-
-df["Zone"] = df["ΔH_spec"].apply(decision_zone)
+df_g = df[df["GROUP"] == group_selected]
 
 # =========================
 # KPI
 # =========================
-st.subheader("KPI – Hardness Control")
+st.subheader("📊 Key Statistics")
 
 col1, col2, col3 = st.columns(3)
 
-total = len(df)
-safe_pct = (df["Zone"] == "SAFE").mean() * 100
-watch_pct = (df["Zone"] == "WATCH").mean() * 100
-risk_pct = (df["Zone"] == "RISK").mean() * 100
+with col1:
+    st.metric(
+        "ΔH LAB (P10)",
+        f"{np.percentile(df_g['ΔH_LAB'],10):.2f}"
+    )
 
-col1.metric("SAFE (%)", f"{safe_pct:.1f}%")
-col2.metric("WATCH (%)", f"{watch_pct:.1f}%")
-col3.metric("RISK (%)", f"{risk_pct:.1f}%")
+with col2:
+    st.metric(
+        "ΔH LINE (P10)",
+        f"{np.percentile(df_g['ΔH_LINE'],10):.2f}"
+    )
+
+with col3:
+    st.metric(
+        "LINE − LAB Mean",
+        f"{df_g['LINE_MINUS_LAB'].mean():.2f}"
+    )
 
 # =========================
-# RESULT TABLE
+# SCATTER: ΔH vs EL
 # =========================
-st.subheader("Analysis Table")
+st.subheader("🔍 Hardness Margin vs Elongation")
 
-show_cols = [
-    hardness_map[hardness_label],
-    spec_col[0],
-    "ΔH_spec",
-    "Hardness_Band",
-    "Zone"
-]
+fig, ax = plt.subplots(figsize=(9,5))
 
-extra_cols = [c for c in ["TENSILE_YIELD", "TENSILE_TENSILE", "TENSILE_ELONG"] if c in df.columns]
-show_cols.extend(extra_cols)
-
-st.dataframe(
-    df[show_cols].sort_values("ΔH_spec").reset_index(drop=True),
-    use_container_width=True
+ax.scatter(
+    df_g["ΔH_LINE"],
+    df_g["TENSILE_ELONG"],
+    alpha=0.7,
+    label="LINE"
 )
 
+ax.scatter(
+    df_g["ΔH_LAB"],
+    df_g["TENSILE_ELONG"],
+    alpha=0.7,
+    label="LAB"
+)
+
+ax.axvline(7, linestyle="--", label="Control limit = 7 HRB")
+
+ax.set_xlabel("Standard − Hardness (HRB)")
+ax.set_ylabel("Elongation (%)")
+ax.legend()
+ax.grid(True)
+
+st.pyplot(fig)
+
 # =========================
-# TECH NOTE
+# SUMMARY TABLE
 # =========================
+st.subheader("📋 Summary Table")
+
+summary = (
+    df_g
+    .groupby("GROUP")
+    .agg(
+        Coil_Count=("GROUP", "count"),
+        LAB_P10=("ΔH_LAB", lambda x: np.percentile(x,10)),
+        LINE_P10=("ΔH_LINE", lambda x: np.percentile(x,10)),
+        LINE_LAB_MEAN=("LINE_MINUS_LAB", "mean"),
+        EL_MIN=("TENSILE_ELONG", "min")
+    )
+    .reset_index()
+)
+
+st.dataframe(summary, use_container_width=True)
+
+# =========================
+# TECHNICAL CONCLUSION
+# =========================
+st.subheader("🧠 Technical Interpretation")
+
 st.markdown("""
-### Technical note
-- ΔH_spec = Hmax − Hardness(center)
-- SAFE zone defined as ΔH ≥ 7 HRB
-- Threshold will be validated by historical EL / TS / YS correlation
+**How to judge current control limit (Standard − 7 HRB):**
+
+- If **LINE_P10 ≫ 7** and **EL is stable** → limit is conservative  
+- If **LINE_P10 ≈ 5~7** → limit is reasonable  
+- If **LINE_P10 < 5** and **EL drops** → limit is risky  
+
+⚠️ Control limit should be defined **by GROUP**, not globally.
 """)
