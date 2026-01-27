@@ -6,14 +6,14 @@ import matplotlib.pyplot as plt
 st.set_page_config(page_title="GI Hardness Control Dashboard", layout="wide")
 
 # =====================================================
-# LOAD & PREPARE DATA
+# LOAD DATA
 # =====================================================
 @st.cache_data
 def load_data():
     url = "https://docs.google.com/spreadsheets/d/1GdnY09hJ2qVHuEBAIJ-eU6B5z8ZdgcGf4P7ZjlAt4JI/export?format=csv"
     df = pd.read_csv(url)
 
-    # --- clean column names ---
+    # Clean column names
     df.columns = (
         df.columns
         .str.strip()
@@ -21,7 +21,7 @@ def load_data():
         .str.replace("  ", " ", regex=True)
     )
 
-    # --- rename columns (CHỐT CỨNG) ---
+    # Rename columns (CHỐT CỨNG)
     col_map = {
         "QUALITY_CODE": "QUALITY_CODE",
         "PRODUCT SPECIFICATION CODE": "STANDARD",
@@ -39,57 +39,77 @@ def load_data():
     }
     df = df.rename(columns={k: v for k, v in col_map.items() if k in df.columns})
 
-    # --- numeric conversion ---
+    # Force numeric
     num_cols = ["H_STD","H_LAB","H_LINE","YS","TS","EL","THICKNESS"]
     for c in num_cols:
         if c in df.columns:
             df[c] = pd.to_numeric(df[c], errors="coerce")
 
-    # --- drop rows without core data ---
+    # Drop only rows without CORE data
     df = df.dropna(subset=["H_STD","H_LAB","H_LINE","YS","TS","EL"])
 
     return df
 
 
 df0 = load_data()
+df_f = df0.copy()
 
-st.title("🔥 GI Hardness – Mechanical Property Control")
+st.title("🔥 GI Hardness – Mechanical Property Control Dashboard")
 
 # =====================================================
-# SIDEBAR – SAFE HIERARCHICAL FILTER
+# SAFE HIERARCHICAL FILTER (KEY FIX)
 # =====================================================
 st.sidebar.header("🔍 Hierarchical Filter")
 
-df_f = df0.copy()
+def safe_multiselect(label, full_series, filtered_series):
+    opts = sorted(full_series.dropna().unique())
+    default = sorted(filtered_series.dropna().unique())
 
-def safe_multiselect(label, series):
-    opts = sorted(series.dropna().unique())
-    if len(opts) == 0:
-        return []
-    return st.sidebar.multiselect(label, opts, default=opts)
+    # Nếu default rỗng → fallback về toàn bộ option
+    if len(default) == 0:
+        default = opts
 
-qc = safe_multiselect("QUALITY_CODE", df_f["QUALITY_CODE"])
-if qc:
-    df_f = df_f[df_f["QUALITY_CODE"].isin(qc)]
+    return st.sidebar.multiselect(label, opts, default=default)
 
-std = safe_multiselect("Standard", df_f["STANDARD"])
-if std:
-    df_f = df_f[df_f["STANDARD"].isin(std)]
 
-mat = safe_multiselect("Material (HR STEEL GRADE)", df_f["MATERIAL"])
-if mat:
-    df_f = df_f[df_f["MATERIAL"].isin(mat)]
+qc = safe_multiselect(
+    "QUALITY_CODE",
+    df0["QUALITY_CODE"],
+    df_f["QUALITY_CODE"]
+)
+df_f = df_f[df_f["QUALITY_CODE"].isin(qc)]
 
-thk = safe_multiselect("Thickness (ORDER GAUGE)", df_f["THICKNESS"])
-if thk:
-    df_f = df_f[df_f["THICKNESS"].isin(thk)]
+std = safe_multiselect(
+    "Standard",
+    df0["STANDARD"],
+    df_f["STANDARD"]
+)
+df_f = df_f[df_f["STANDARD"].isin(std)]
 
-coat = safe_multiselect("Coating (TOP COATMASS)", df_f["COATING"])
-if coat:
-    df_f = df_f[df_f["COATING"].isin(coat)]
+mat = safe_multiselect(
+    "Material (HR STEEL GRADE)",
+    df0["MATERIAL"],
+    df_f["MATERIAL"]
+)
+df_f = df_f[df_f["MATERIAL"].isin(mat)]
 
+thk = safe_multiselect(
+    "Thickness (ORDER GAUGE)",
+    df0["THICKNESS"],
+    df_f["THICKNESS"]
+)
+df_f = df_f[df_f["THICKNESS"].isin(thk)]
+
+coat = safe_multiselect(
+    "Coating (TOP COATMASS)",
+    df0["COATING"],
+    df_f["COATING"]
+)
+df_f = df_f[df_f["COATING"].isin(coat)]
+
+# Guard cuối – chỉ cảnh báo, KHÔNG crash
 if df_f.empty:
-    st.warning("⚠️ No data after filtering – please relax filter conditions")
+    st.warning("⚠️ No valid data for this combination. Please adjust filters.")
     st.stop()
 
 # =====================================================
@@ -112,11 +132,11 @@ tab1, tab2, tab3, tab4, tab5 = st.tabs([
 # -----------------------------------------------------
 with tab1:
     st.subheader("Group Overview")
-    c1, c2, c3 = st.columns(3)
 
-    c1.metric("Mean Hardness STD", f"{df_f['H_STD'].mean():.2f}")
-    c2.metric("Mean Hardness LAB", f"{df_f['H_LAB'].mean():.2f}")
-    c3.metric("Mean Hardness LINE", f"{df_f['H_LINE'].mean():.2f}")
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Mean H_STD", f"{df_f['H_STD'].mean():.2f}")
+    c2.metric("Mean H_LAB", f"{df_f['H_LAB'].mean():.2f}")
+    c3.metric("Mean H_LINE", f"{df_f['H_LINE'].mean():.2f}")
 
     st.dataframe(df_f.head(200), use_container_width=True)
 
@@ -162,7 +182,7 @@ with tab3:
 
 # -----------------------------------------------------
 with tab4:
-    st.subheader("Thickness Sensitivity")
+    st.subheader("Thickness Sensitivity (ΔH vs YS)")
 
     fig, ax = plt.subplots()
     for t in sorted(df_f["THICKNESS"].unique()):
@@ -197,6 +217,6 @@ with tab5:
         st.error("🔴 Control is RISKY – Review hardness limit")
 
     st.info(
-        "Control limit must be defined by MATERIAL + THICKNESS + COATING.\n"
-        "YS drives limit, TS is safety constraint, EL confirms formability."
+        "Limit must be defined by MATERIAL + THICKNESS + COATING.\n"
+        "YS drives the limit, TS is safety constraint, EL confirms formability."
     )
