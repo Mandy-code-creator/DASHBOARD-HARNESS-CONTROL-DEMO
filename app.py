@@ -97,6 +97,20 @@ def variability_table(group_cols, value_col):
     )
 
 # ================================
+# FIXED QC GROUPING LEVEL
+# QUALITY_CODE + PRODUCT SPEC + HR STEEL GRADE + GAUGE + COATMASS
+QC_GROUP = [
+    c for c in [
+        "Quality",
+        "Material",
+        "Steel_Grade",
+        "Thickness",
+        "Coating",
+    ] if c in df_valid.columns
+]
+
+
+# ================================
 # TABS
 # ================================
 tabs = st.tabs([
@@ -109,20 +123,20 @@ tabs = st.tabs([
 
 # -------- TAB 1: COIL --------
 with tabs[0]:
-    st.subheader("Variability by COIL_NO")
+    st.subheader("Variability by COIL_NO (raw coil-level)")
     for col in ["Hardness", "YS", "TS", "EL"]:
         st.markdown(f"### {col}")
         st.dataframe(variability_table(["Coil_ID"], col))
+(["Coil_ID"], col))
 
 # -------- TAB 2: MATERIAL --------
 with tabs[1]:
-    st.subheader("Variability by Material")
-    if "Material" in df_valid.columns:
-        for col in ["Hardness", "YS", "TS", "EL"]:
-            st.markdown(f"### {col}")
-            st.dataframe(variability_table(["Material"], col))
-    else:
-        st.info("Material column not available")
+    st.subheader("QC-level Variability (same Quality / Spec / Grade / Gauge / Coating)")
+    st.caption("Grouped by: QUALITY_CODE + PRODUCT SPECIFICATION CODE + HR STEEL GRADE + ORDER GAUGE + TOP COATMASS")
+    for col in ["Hardness", "YS", "TS", "EL"]:
+        st.markdown(f"### {col}")
+        st.dataframe(variability_table(QC_GROUP, col))
+("Material column not available")
 
 # -------- TAB 3: COATING --------
 with tabs[2]:
