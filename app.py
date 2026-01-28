@@ -29,7 +29,8 @@ raw = load_data(DATA_URL)
 column_mapping = {
     "PRODUCT SPECIFICATION CODE": "Product_Spec",
     "HR STEEL GRADE": "Material",
-    "TOP TOP TOP COATMASS": "Top_TOP COATMASS",
+    coatmass = df_spec["Top_Coatmass"].iloc[0]
+,
     "ORDER GAUGE": "Order_Gauge",
     "COIL NO": "COIL_NO",
     "QUALITY_CODE": "Quality_Code",
