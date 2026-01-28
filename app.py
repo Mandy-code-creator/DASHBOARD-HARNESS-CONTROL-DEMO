@@ -182,14 +182,20 @@ if task == "QA Strict Spec Check (1 NG = FAIL)":
             return False
         return (val < std_min) or (val > std_max)
 
-    # lặp theo từng Product_Spec
+    # ===== LOOP THEO PRODUCT SPEC =====
     for spec, df_spec in df.groupby("Product_Spec"):
 
+        df_spec = df_spec.copy()
+
+        # ===== LẤY THÔNG TIN SPEC (FIXED THEO SPEC) =====
         std_min = df_spec["Std_Min"].iloc[0]
         std_max = df_spec["Std_Max"].iloc[0]
 
-        # xác định NG
-        df_spec = df_spec.copy()
+        material  = df_spec["Material"].iloc[0]
+        coatmass  = df_spec["Coatmass"].iloc[0]
+        gauge     = df_spec["Gauge"].iloc[0]
+
+        # ===== XÁC ĐỊNH NG =====
         df_spec["NG_LAB"] = df_spec["Hardness_LAB"].apply(
             lambda x: is_ng(x, std_min, std_max)
         )
@@ -197,27 +203,21 @@ if task == "QA Strict Spec Check (1 NG = FAIL)":
             lambda x: is_ng(x, std_min, std_max)
         )
 
-        n_coils = df_spec["COIL_NO"].nunique()
-        n_ng = (df_spec["NG_LAB"] | df_spec["NG_LINE"]).sum()
+        # ===== COIL NG (LOGIC QA ĐÚNG) =====
+        df_spec["COIL_NG"] = df_spec["NG_LAB"] | df_spec["NG_LINE"]
 
+        df_ng = (
+            df_spec[df_spec["COIL_NG"]]
+            .drop_duplicates(subset="COIL_NO")
+        )
+
+        n_ng = df_ng["COIL_NO"].nunique()
         qa_result = "FAIL" if n_ng > 0 else "PASS"
 
         # ===== HEADER =====
         st.markdown(
             f"## 🧱 Product Spec: `{spec}`  \n"
-            f"➡️ **n = {n_coils} coils**  \n"
-            f"🧪 **QA Result: `{qa_result}`**"
-        )
-
-        # ===== DISPLAY TABLE =====
-        show_cols = [
-            "COIL_NO",
-            "Std_Min", "Std_Max",
-            "Hardness_LAB", "Hardness_LINE",
-            "YS", "TS", "EL"
-        ]
-
-        st.dataframe(
-            df_spec[show_cols].sort_values("COIL_NO"),
-            use_container_width=True
-        )
+            f"**Material:** {material} | "
+            f"**Coatmass:** {coatmass} | "
+            f"**Gauge:** {gauge}  \n"
+            f"❌ **n = {n_ng} coils out of spec**  \n"
