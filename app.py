@@ -99,9 +99,48 @@ required_cols = [
     "EL"
 ]
 
+# =============================================================
+# SCHEMA NORMALIZATION (AUTO MAP COLUMNS)
+# =============================================================
+
+COLUMN_ALIAS = {
+    "coil_id": "Coil_ID",
+    "coil": "Coil_ID",
+    "batch": "Batch",
+    "batch_no": "Batch",
+    "hardness": "Hardness",
+    "h": "Hardness",
+    "ys": "YS",
+    "yield_strength": "YS",
+    "ts": "TS",
+    "tensile_strength": "TS",
+    "el": "EL",
+    "elongation": "EL",
+}
+
+# normalize column names
+normalized_cols = {}
+for c in df.columns:
+    key = c.strip().lower()
+    normalized_cols[c] = COLUMN_ALIAS.get(key, c)
+
+df = df.rename(columns=normalized_cols)
+
+required_cols = [
+    "Coil_ID",
+    "Batch",
+    "Hardness",
+    "Standard Hardness",
+    "YS",
+    "TS",
+    "EL"
+]
+
 missing = [c for c in required_cols if c not in df.columns]
 if missing:
-    st.error(f"Missing required columns: {missing}")
+    st.error("❌ Missing required columns after auto-mapping")
+    st.write("Missing:", missing)
+    st.write("Available columns:", list(df.columns))
     st.stop()
 
 # =============================================================
