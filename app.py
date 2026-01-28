@@ -82,6 +82,20 @@ for c in ["Hardness_LAB", "Hardness_LINE", "YS", "TS", "EL"]:
     df[c] = pd.to_numeric(df[c], errors="coerce")
 
 # ================================
+# ================================
+# ANALYSIS TASK SELECTOR
+# ================================
+st.sidebar.header("🧩 ANALYSIS TASK")
+
+task = st.sidebar.radio(
+    "Select analysis task",
+    [
+        "Summary (raw tables)",
+        "QA Strict Spec Check (1 NG = FAIL)"
+    ],
+    index=0
+)
+# ================================
 # QUALITY CODE FILTER (BUTTON STYLE)
 # ================================
 st.sidebar.header("🎛 QUALITY CODE")
@@ -116,6 +130,7 @@ if valid_conditions.empty:
 valid_conditions = valid_conditions.sort_values("N_Coils", ascending=False)
 
 # ================================
+if task == "Summary (raw tables)":
 # DISPLAY TABLES
 # ================================
 st.subheader("📋 Coil-level Data (Offline measurements only)")
