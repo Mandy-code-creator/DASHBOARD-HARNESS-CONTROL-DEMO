@@ -26,9 +26,27 @@ def load_data(url):
 raw = load_data(DATA_URL)
 
 # ================================
+# COIL NO COLUMN (AUTO DETECT)
+# ================================
+coil_candidates = [
+    "COIL NO",
+    "COIL_NO",
+    "COIL",
+    "COIL NUMBER",
+    "卷號",
+]
+
+coil_col = next((c for c in coil_candidates if c in raw.columns), None)
+
+if coil_col is None:
+    st.error("❌ Không tìm thấy cột mã COIL NO trong dữ liệu")
+    st.stop()
+
+# ================================
 # COLUMN MAPPING
 # ================================
 column_mapping = {
+    coil_col: "Coil_No",
     "PRODUCT SPECIFICATION CODE": "Product_Spec",
     "HR STEEL GRADE": "Material",
     "TOP COATMASS": "Top_Coatmass",
@@ -47,6 +65,7 @@ df = raw.rename(
 # CHECK REQUIRED COLUMNS
 # ================================
 required = [
+    "Coil_No",
     "Product_Spec",
     "Material",
     "Top_Coatmass",
@@ -63,13 +82,13 @@ if missing:
     st.stop()
 
 # ================================
-# FORCE NUMERIC (SAFE)
+# FORCE NUMERIC (DISPLAY ONLY)
 # ================================
 for c in ["Hardness", "YS", "TS", "EL"]:
     df[c] = pd.to_numeric(df[c], errors="coerce")
 
 # ================================
-# GROUP BY ONE CONDITION ONLY
+# ONE CONDITION = ONE TABLE
 # ================================
 GROUP_COLS = [
     "Product_Spec",
@@ -90,8 +109,7 @@ condition_order = (
 # ================================
 st.caption(
     "Raw coil-level data only. "
-    "Each table contains ONE and ONLY ONE condition "
-    "(Product Spec + Material + Coatmass + Gauge)."
+    "Each table contains ONE condition only."
 )
 
 for _, cond in condition_order.iterrows():
@@ -116,9 +134,15 @@ for _, cond in condition_order.iterrows():
 
     st.dataframe(
         df_cond[
-            ["Hardness", "YS", "TS", "EL"]
+            [
+                "Coil_No",
+                "Hardness",
+                "YS",
+                "TS",
+                "EL",
+            ]
         ],
         use_container_width=True
     )
 
-st.success("✅ One-condition-per-table raw data displayed correctly")
+st.success("✅ Coil No added – logic unchanged")
