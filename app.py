@@ -85,10 +85,9 @@ for c in ["Hardness", "YS", "TS", "EL"]:
 # ================================
 # SIDEBAR FILTER – QUALITY CODE
 # ================================
+# SIDEBAR FILTER – QUALITY CODE (RADIO BUTTON)
+# ================================
 with st.sidebar:
-    st.header("🎛 Filter")
-
-    with st.sidebar:
     st.header("🎛 QUALITY CODE")
 
     qc_list = sorted(df["Quality_Code"].dropna().unique())
