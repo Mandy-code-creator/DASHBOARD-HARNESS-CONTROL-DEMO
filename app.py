@@ -69,31 +69,24 @@ def safe_spc_stats(df, value_col):
 
 
 # =============================================================
-# SIDEBAR – LOAD DATA
+# LOAD DATA – GOOGLE SHEETS (SINGLE SOURCE OF TRUTH)
 # =============================================================
-st.sidebar.header("📂 Data Input")
 
 DATA_URL = "https://docs.google.com/spreadsheets/d/1GdnY09hJ2qVHuEBAIJ-eU6B5z8ZdgcGf4P7ZjlAt4JI/export?format=csv"
 
-source = st.sidebar.radio(
-    "Select data source",
-    ["Upload CSV", "Google Sheets (URL)"]
-)
+st.sidebar.header("📂 Data Source")
+st.sidebar.markdown("**Locked source: Google Sheets**")
+st.sidebar.code(DATA_URL)
 
-if source == "Upload CSV":
-    file = st.sidebar.file_uploader("Upload CSV", type=["csv"])
-    if file is None:
-        st.info("Please upload CSV file to start.")
-        st.stop()
-    df = pd.read_csv(file)
-
-else:
-    st.sidebar.markdown("Using fixed Google Sheets document")
-    st.sidebar.code(DATA_URL)
+try:
     df = pd.read_csv(DATA_URL)
+except Exception as e:
+    st.error("Failed to load data from Google Sheets")
+    st.exception(e)
+    st.stop()
 
 # =============================================================
-# LOAD DATA
+# DATA LOADED
 # =============================================================
 
 required_cols = [
