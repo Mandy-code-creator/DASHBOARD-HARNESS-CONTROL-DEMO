@@ -46,7 +46,7 @@ column_mapping = {
 df = raw.rename(columns={k: v for k, v in column_mapping.items() if k in raw.columns})
 
 # ================================
-# CHECK REQUIRED COLUMNS (NO BATCH!)
+# CHECK REQUIRED COLUMNS (NO BATCH)
 # ================================
 required = ["Coil_ID", "Hardness", "YS", "TS", "EL"]
 missing = [c for c in required if c not in df.columns]
@@ -63,7 +63,7 @@ def parse_spec(x):
         if isinstance(x, str) and "~" in x:
             a, b = x.split("~")
             return float(a), float(b)
-    except:
+    except Exception:
         pass
     return np.nan, np.nan
 
@@ -71,7 +71,11 @@ if "Standard_Hardness" in df.columns:
     df[["Hmin_spec", "Hmax_spec"]] = df["Standard_Hardness"].apply(
         lambda x: pd.Series(parse_spec(x))
     )
-    df["Spec_status"] = np.where(df[["Hmin_spec", "Hmax_spec"]].isna().any(axis=1), "INVALID_SPEC", "VALID_SPEC")
+    df["Spec_status"] = np.where(
+        df[["Hmin_spec", "Hmax_spec"]].isna().any(axis=1),
+        "INVALID_SPEC",
+        "VALID_SPEC",
+    )
 else:
     df["Spec_status"] = "INVALID_SPEC"
 
@@ -97,25 +101,26 @@ def variability_table(group_cols, value_col):
     )
 
 # ================================
-# FIXED QC GROUPING LEVEL
-# QUALITY_CODE + PRODUCT SPEC + HR STEEL GRADE + GAUGE + COATMASS
+# QC GROUPING LEVEL (FIXED)
+# ================================
 QC_GROUP = [
-    c for c in [
+    c
+    for c in [
         "Quality",
         "Material",
         "Steel_Grade",
         "Thickness",
         "Coating",
-    ] if c in df_valid.columns
+    ]
+    if c in df_valid.columns
 ]
-
 
 # ================================
 # TABS
 # ================================
 tabs = st.tabs([
     "🧵 By COIL",
-    "🧱 By Material",
+    "🧱 QC-Level Population",
     "🎨 By Coating",
     "📏 By Thickness",
     "⚠️ Spec Warning",
@@ -123,20 +128,18 @@ tabs = st.tabs([
 
 # -------- TAB 1: COIL --------
 with tabs[0]:
-    st.subheader("Variability by COIL_NO (raw coil-level)")
+    st.subheader("Variability by COIL_NO (coil-level)")
     for col in ["Hardness", "YS", "TS", "EL"]:
         st.markdown(f"### {col}")
         st.dataframe(variability_table(["Coil_ID"], col))
-(["Coil_ID"], col))
 
-# -------- TAB 2: MATERIAL --------
+# -------- TAB 2: QC LEVEL --------
 with tabs[1]:
-    st.subheader("QC-level Variability (same Quality / Spec / Grade / Gauge / Coating)")
+    st.subheader("QC-level Variability")
     st.caption("Grouped by: QUALITY_CODE + PRODUCT SPECIFICATION CODE + HR STEEL GRADE + ORDER GAUGE + TOP COATMASS")
     for col in ["Hardness", "YS", "TS", "EL"]:
         st.markdown(f"### {col}")
         st.dataframe(variability_table(QC_GROUP, col))
-("Material column not available")
 
 # -------- TAB 3: COATING --------
 with tabs[2]:
@@ -162,8 +165,10 @@ with tabs[3]:
 with tabs[4]:
     st.subheader("⚠️ INVALID STANDARD HARDNESS")
     st.write("These records are excluded from quantitative analysis")
-    st.dataframe(df[df["Spec_status"] == "INVALID_SPEC"][
-        [c for c in ["Coil_ID", "Standard_Hardness", "Hardness"] if c in df.columns]
-    ])
+    st.dataframe(
+        df[df["Spec_status"] == "INVALID_SPEC"][
+            [c for c in ["Coil_ID", "Standard_Hardness", "Hardness"] if c in df.columns]
+        ]
+    )
 
-st.success("✅ Dashboard loaded successfully (COIL-based, no Batch logic)")
+st.success("✅ Dashboard loaded successfully (COIL-based, QC-safe)")
