@@ -131,46 +131,43 @@ valid_conditions = valid_conditions.sort_values("N_Coils", ascending=False)
 
 # ================================
 if task == "Summary (raw tables)":
-# DISPLAY TABLES
-# ================================
-st.subheader("📋 Coil-level Data (Offline measurements only)")
-st.caption(
-    "• 1 table = 1 Material + Coatmass + Gauge  \n"
-    "• Standard Hardness → Std_Min / Std_Max  \n"
-    "• No averaging, no SPC, no batch  \n"
-    "• ≥ 30 coils only"
-)
 
-for _, cond in valid_conditions.iterrows():
-
-    spec, mat, coat, gauge, n = (
-        cond["Product_Spec"],
-        cond["Material"],
-        cond["Top_Coatmass"],
-        cond["Order_Gauge"],
-        int(cond["N_Coils"])
+    st.subheader("📋 Coil-level Data (Offline measurements only)")
+    st.caption(
+        "• 1 table = 1 Material + Coatmass + Gauge  \n"
+        "• Standard Hardness → Std_Min / Std_Max  \n"
+        "• No averaging, no SPC, no batch  \n"
+        "• ≥ 30 coils only"
     )
 
-    st.markdown(
-        f"## 🧱 Product Spec: `{spec}`  \n"
-        f"**Material:** {mat} | **Coatmass:** {coat} | **Gauge:** {gauge}  \n"
-        f"➡️ **n = {n} coils**"
-    )
+    for _, cond in valid_conditions.iterrows():
 
-    table_df = df[
-        (df["Product_Spec"] == spec) &
-        (df["Material"] == mat) &
-        (df["Top_Coatmass"] == coat) &
-        (df["Order_Gauge"] == gauge)
-    ][[
-        "COIL_NO",
-        "Std_Min",
-        "Std_Max",
-        "Hardness_LAB",
-        "Hardness_LINE",
-        "YS", "TS", "EL"
-    ]].sort_values("COIL_NO")
+        spec, mat, coat, gauge, n = (
+            cond["Product_Spec"],
+            cond["Material"],
+            cond["Top_Coatmass"],
+            cond["Order_Gauge"],
+            int(cond["N_Coils"])
+        )
 
-    st.dataframe(table_df, use_container_width=True)
+        st.markdown(
+            f"## 🧱 Product Spec: `{spec}`  \n"
+            f"**Material:** {mat} | **Coatmass:** {coat} | **Gauge:** {gauge}  \n"
+            f"➡️ **n = {n} coils**"
+        )
 
-st.success("✅ Clean report generated – đúng logic nghiệp vụ")
+        table_df = df[
+            (df["Product_Spec"] == spec) &
+            (df["Material"] == mat) &
+            (df["Top_Coatmass"] == coat) &
+            (df["Order_Gauge"] == gauge)
+        ][[
+            "COIL_NO",
+            "Std_Min",
+            "Std_Max",
+            "Hardness_LAB",
+            "Hardness_LINE",
+            "YS", "TS", "EL"
+        ]].sort_values("COIL_NO")
+
+        st.dataframe(table_df, use_container_width=True)
