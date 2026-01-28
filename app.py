@@ -91,52 +91,53 @@ except Exception as e:
 
 required_cols = [
     "Coil_ID",
+    "ORDER NUMBER",  # use ORDER NUMBER instead of Batch
+    "Hardness",
+    "Standard Hardness",
+    "YS",
+    "TS",
+    "EL",
+]
+
+# =============================================================
+# =============================================================
+# SCHEMA NORMALIZATION (EXPLICIT MAP – LOCKED TO YOUR SHEET)
+# =============================================================
+
+# Explicit column mapping based on actual Google Sheets header
+EXPLICIT_MAP = {
+    "COIL_NO": "Coil_ID",
+    "ORDER NUMBER": "ORDER NUMBER",  # keep original name as business key
+    "Standard Hardness": "Standard Hardness",
+    "HARDNESS 冶金": "Hardness",
+    "TENSILE_YIELD": "YS",
+    "TENSILE_TENSILE": "TS",
+    "TENSILE_ELONG": "EL",
+}
+
+# apply explicit mapping
+mapped_cols = {}
+for c in df.columns:
+    if c in EXPLICIT_MAP:
+        mapped_cols[c] = EXPLICIT_MAP[c]
+
+df = df.rename(columns=mapped_cols)
+
+required_cols = [
+    "Coil_ID",
     "Batch",
     "Hardness",
     "Standard Hardness",
     "YS",
     "TS",
-    "EL"
+    "EL",
 ]
 
-# =============================================================
-# SCHEMA NORMALIZATION (ROBUST AUTO MAP – CONTAINS LOGIC)
-# =============================================================
-
-import unicodedata
-
-def normalize_text(s):
-    return unicodedata.normalize("NFKD", s).encode("ascii", "ignore").decode("ascii").lower().strip()
-
-TARGET_COLUMNS = {
-    "coil_id": ["coil"],
-    "batch": ["order", "batch", "lot"],
-    "hardness": ["hardness"],
-    "ys": ["tensile_yield", "yield"],
-    "ts": ["tensile_tensile", "tensile"],
-    "el": ["tensile_elong", "elong"]
-}
-
-column_map = {}
-
-for col in df.columns:
-    ncol = normalize_text(col)
-    for target, keywords in TARGET_COLUMNS.items():
-        if any(k in ncol for k in keywords):
-            column_map[col] = target.upper() if target != "coil_id" else "Coil_ID"
-            break
-
-# apply mapping
-df = df.rename(columns=column_map)
-
-required_cols = ["Coil_ID", "Batch", "Hardness", "YS", "TS", "EL", "Standard Hardness"]
 missing = [c for c in required_cols if c not in df.columns]
-
 if missing:
-    st.error("❌ Missing required columns after robust auto-mapping")
+    st.error("❌ Missing required columns after EXPLICIT mapping")
     st.write("Missing:", missing)
     st.write("Detected columns:", list(df.columns))
-    st.info("👉 Please ensure column names contain keywords: coil / batch / hard / yield / tensile / elong")
     st.stop()
 
 # =============================================================
@@ -275,6 +276,12 @@ with tab5:
             ])
             .reset_index()
         )
+
+    # -------- LEVEL 0: COIL LEVEL --------
+    st.markdown("### 🧵 By COIL_NO (coil-level variability)")
+    for col in ["Hardness", "TS", "YS", "EL"]:
+        st.markdown(f"**{col}**")
+        st.dataframe(variability_table(["Coil_ID"], col))
 
     # -------- LEVEL 1: MATERIAL --------
     st.markdown("### 🧱 By Material")
