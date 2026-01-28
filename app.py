@@ -87,10 +87,18 @@ summary = (
 )
 
 # ================================
-# DISPLAY SINGLE FINAL TABLE
-# ================================
-st.subheader("📋 Final Material-level Summary Table")
-st.caption("Grouped simultaneously by Product Spec + Material + Top Coatmass + Order Gauge")
-st.dataframe(summary, use_container_width=True)
+st.subheader("📋 Material-level Summary by Product Specification")
+st.caption(
+    "Each table represents ONE Product Spec. "
+    "Grouped by Material + Top Coatmass + Order Gauge"
+)
 
-st.success("✅ Single-table logic applied successfully (Mean & STDEV only)")
+# ===== LOOP BY PRODUCT SPEC =====
+for spec, df_spec in summary.groupby("Product_Spec"):
+
+    st.markdown(f"### 🧱 Product Spec: `{spec}`")
+
+    st.dataframe(
+        df_spec.drop(columns=["Product_Spec"]),
+        use_container_width=True
+    )
