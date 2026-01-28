@@ -9,7 +9,10 @@ from io import StringIO
 # ================================
 DATA_URL = "https://docs.google.com/spreadsheets/d/1GdnY09hJ2qVHuEBAIJ-eU6B5z8ZdgcGf4P7ZjlAt4JI/export?format=csv"
 
-st.set_page_config(page_title="Material-level Mechanical Summary", layout="wide")
+st.set_page_config(
+    page_title="Material-level Mechanical Summary",
+    layout="wide"
+)
 st.title("📊 Material-level Hardness & Mechanical Properties Summary")
 
 # ================================
@@ -37,7 +40,9 @@ column_mapping = {
     "TENSILE_ELONG": "EL",
 }
 
-df = raw.rename(columns={k: v for k, v in column_mapping.items() if k in raw.columns})
+df = raw.rename(
+    columns={k: v for k, v in column_mapping.items() if k in raw.columns}
+)
 
 # ================================
 # CHECK REQUIRED COLUMNS
@@ -59,6 +64,24 @@ if missing:
     st.stop()
 
 # ================================
+# FORCE NUMERIC (SAFETY)
+# ================================
+for c in ["Hardness", "YS", "TS", "EL"]:
+    df[c] = pd.to_numeric(df[c], errors="coerce")
+
+# ================================
+# COUNT NUMBER OF COILS (n)
+# ================================
+count_df = (
+    df.groupby(
+        ["Product_Spec", "Material", "Top_Coatmass", "Order_Gauge"],
+        dropna=False
+    )
+    .size()
+    .reset_index(name="N_Coils")
+)
+
+# ================================
 # GROUP LOGIC (MATERIAL LEVEL)
 # ================================
 GROUP_COLS = [
@@ -69,7 +92,7 @@ GROUP_COLS = [
 ]
 
 # ================================
-# AGGREGATION: MEAN + STDEV ONLY
+# AGGREGATION: MEAN + STDEV
 # ================================
 summary = (
     df.groupby(GROUP_COLS)
@@ -87,9 +110,21 @@ summary = (
 )
 
 # ================================
+# MERGE COIL COUNT INTO SUMMARY
+# ================================
+summary = summary.merge(
+    count_df,
+    on=["Product_Spec", "Material", "Top_Coatmass", "Order_Gauge"],
+    how="left"
+)
+
+# ================================
+# DISPLAY
+# ================================
 st.subheader("📋 Material-level Summary (One condition per table)")
 st.caption(
-    "Each table represents ONE condition only. "
+    "Each table represents ONLY ONE combination of "
+    "Material + Top Coatmass + Order Gauge. "
     "Tables with more coils (n) are displayed first."
 )
 
@@ -131,3 +166,5 @@ for spec in spec_order:
             ).to_frame(name="Value"),
             use_container_width=True
         )
+
+st.success("✅ Report generated successfully (CÁCH 1 – One condition per table)")
