@@ -48,4 +48,49 @@ required = [
     "Top_Coatmass",
     "Order_Gauge",
     "Hardness",
-    "YS
+    "YS",
+    "TS",
+    "EL",
+]
+
+missing = [c for c in required if c not in df.columns]
+if missing:
+    st.error(f"❌ Missing required columns: {missing}")
+    st.stop()
+
+# ================================
+# GROUP LOGIC (MATERIAL LEVEL)
+# ================================
+GROUP_COLS = [
+    "Product_Spec",
+    "Material",
+    "Top_Coatmass",
+    "Order_Gauge",
+]
+
+# ================================
+# AGGREGATION: MEAN + STDEV ONLY
+# ================================
+summary = (
+    df.groupby(GROUP_COLS)
+      .agg(
+          Hardness_mean=("Hardness", "mean"),
+          Hardness_stdev=("Hardness", "std"),
+          YS_mean=("YS", "mean"),
+          YS_stdev=("YS", "std"),
+          TS_mean=("TS", "mean"),
+          TS_stdev=("TS", "std"),
+          EL_mean=("EL", "mean"),
+          EL_stdev=("EL", "std"),
+      )
+      .reset_index()
+)
+
+# ================================
+# DISPLAY SINGLE FINAL TABLE
+# ================================
+st.subheader("📋 Final Material-level Summary Table")
+st.caption("Grouped simultaneously by Product Spec + Material + Top Coatmass + Order Gauge")
+st.dataframe(summary, use_container_width=True)
+
+st.success("✅ Single-table logic applied successfully (Mean & STDEV only)")
