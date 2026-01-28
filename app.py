@@ -202,7 +202,9 @@ if task == "QA Strict Spec Check (1 NG = FAIL)":
 
         n_ng = df_ng["COIL_NO"].nunique()
         qa_result = "FAIL" if n_ng > 0 else "PASS"
-
+        # 🔥 CHỈ HIỂN THỊ KHI FAIL
+        if n_ng == 0:
+            continue
         header_md = f"""
 ## 🧱 Product Spec: `{spec}`
 
