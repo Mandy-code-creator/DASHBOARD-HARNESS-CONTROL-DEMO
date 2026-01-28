@@ -89,11 +89,11 @@ summary = (
 # ================================
 st.subheader("📋 Material-level Summary (One condition per table)")
 st.caption(
-    "Each table contains ONLY ONE combination of "
-    "Material + Top Coatmass + Order Gauge"
+    "Each table represents ONE condition only. "
+    "Tables with more coils (n) are displayed first."
 )
 
-# ===== Product_Spec ORDER (more data first) =====
+# ===== Product_Spec ORDER (more conditions first) =====
 spec_order = (
     summary.groupby("Product_Spec")
            .size()
@@ -107,20 +107,27 @@ for spec in spec_order:
 
     df_spec = summary[summary["Product_Spec"] == spec]
 
-    # ===== LOOP EACH UNIQUE CONDITION =====
-    for (mat, coat, gauge), df_one in df_spec.groupby(
-        ["Material", "Top_Coatmass", "Order_Gauge"]
-    ):
+    # ===== SORT CONDITIONS BY SAMPLE SIZE =====
+    df_spec = df_spec.sort_values("N_Coils", ascending=False)
+
+    for _, row in df_spec.iterrows():
 
         st.markdown(
-            f"### 🔹 Material: **{mat}** | "
-            f"Coatmass: **{coat}** | "
-            f"Gauge: **{gauge}**"
+            f"### 🔹 Material: **{row['Material']}** | "
+            f"Coatmass: **{row['Top_Coatmass']}** | "
+            f"Gauge: **{row['Order_Gauge']}** "
+            f"➡️ **n = {int(row['N_Coils'])} coils**"
         )
 
         st.dataframe(
-            df_one.drop(
-                columns=["Product_Spec", "Material", "Top_Coatmass", "Order_Gauge"]
-            ),
+            row.drop(
+                labels=[
+                    "Product_Spec",
+                    "Material",
+                    "Top_Coatmass",
+                    "Order_Gauge",
+                    "N_Coils",
+                ]
+            ).to_frame(name="Value"),
             use_container_width=True
         )
