@@ -26,20 +26,13 @@ def load_data(url):
 raw = load_data(DATA_URL)
 
 # ================================
-# COIL NO COLUMN (AUTO DETECT)
+# COIL NO AUTO DETECT
 # ================================
-coil_candidates = [
-    "COIL NO",
-    "COIL_NO",
-    "COIL",
-    "COIL NUMBER",
-    "卷號",
-]
-
+coil_candidates = ["COIL NO", "COIL_NO", "COIL", "COIL NUMBER", "卷號"]
 coil_col = next((c for c in coil_candidates if c in raw.columns), None)
 
 if coil_col is None:
-    st.error("❌ Không tìm thấy cột mã COIL NO trong dữ liệu")
+    st.error("❌ Không tìm thấy cột COIL NO")
     st.stop()
 
 # ================================
@@ -51,6 +44,7 @@ column_mapping = {
     "HR STEEL GRADE": "Material",
     "TOP COATMASS": "Top_Coatmass",
     "ORDER GAUGE": "Order_Gauge",
+    "QUALITY_CODE": "Quality_Code",
     "HARDNESS 冶金": "Hardness",
     "TENSILE_YIELD": "YS",
     "TENSILE_TENSILE": "TS",
@@ -70,6 +64,7 @@ required = [
     "Material",
     "Top_Coatmass",
     "Order_Gauge",
+    "Quality_Code",
     "Hardness",
     "YS",
     "TS",
@@ -86,6 +81,21 @@ if missing:
 # ================================
 for c in ["Hardness", "YS", "TS", "EL"]:
     df[c] = pd.to_numeric(df[c], errors="coerce")
+
+# ================================
+# SIDEBAR FILTER – QUALITY CODE
+# ================================
+with st.sidebar:
+    st.header("🎛 Filter")
+
+    qc_list = sorted(df["Quality_Code"].dropna().unique())
+    qc_sel = st.multiselect(
+        "QUALITY_CODE",
+        qc_list,
+        default=qc_list
+    )
+
+    df = df[df["Quality_Code"].isin(qc_sel)]
 
 # ================================
 # ONE CONDITION = ONE TABLE
@@ -109,6 +119,7 @@ condition_order = (
 # ================================
 st.caption(
     "Raw coil-level data only. "
+    "Filtered by QUALITY_CODE. "
     "Each table contains ONE condition only."
 )
 
@@ -136,6 +147,7 @@ for _, cond in condition_order.iterrows():
         df_cond[
             [
                 "Coil_No",
+                "Quality_Code",
                 "Hardness",
                 "YS",
                 "TS",
@@ -145,4 +157,4 @@ for _, cond in condition_order.iterrows():
         use_container_width=True
     )
 
-st.success("✅ Coil No added – logic unchanged")
+st.success("✅ QUALITY_CODE filter applied – logic intact")
