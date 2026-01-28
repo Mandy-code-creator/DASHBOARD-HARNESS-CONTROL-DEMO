@@ -1,6 +1,5 @@
 import streamlit as st
 import pandas as pd
-import numpy as np
 import requests
 from io import StringIO
 
@@ -10,10 +9,12 @@ from io import StringIO
 DATA_URL = "https://docs.google.com/spreadsheets/d/1GdnY09hJ2qVHuEBAIJ-eU6B5z8ZdgcGf4P7ZjlAt4JI/export?format=csv"
 
 st.set_page_config(
-    page_title="Material-level Mechanical Summary",
+    page_title="Coil-level Mechanical Data",
     layout="wide"
 )
-st.title("📊 Material-level Hardness & Mechanical Properties Summary")
+
+st.title("📄 Coil-level Hardness & Mechanical Properties")
+st.caption("Raw data only – NO average, NO SPC, NO batch, NO chart")
 
 # ================================
 # LOAD DATA
@@ -27,7 +28,7 @@ def load_data(url):
 raw = load_data(DATA_URL)
 
 # ================================
-# COLUMN MAPPING (EXPLICIT & SAFE)
+# COLUMN MAPPING
 # ================================
 column_mapping = {
     "PRODUCT SPECIFICATION CODE": "Product_Spec",
@@ -47,7 +48,7 @@ df = raw.rename(
 # ================================
 # CHECK REQUIRED COLUMNS
 # ================================
-required = [
+required_cols = [
     "Product_Spec",
     "Material",
     "Top_Coatmass",
@@ -58,113 +59,58 @@ required = [
     "EL",
 ]
 
-missing = [c for c in required if c not in df.columns]
+missing = [c for c in required_cols if c not in df.columns]
 if missing:
     st.error(f"❌ Missing required columns: {missing}")
     st.stop()
 
 # ================================
-# FORCE NUMERIC (SAFETY)
+# FORCE NUMERIC (NO CALCULATION)
 # ================================
 for c in ["Hardness", "YS", "TS", "EL"]:
     df[c] = pd.to_numeric(df[c], errors="coerce")
 
 # ================================
-# COUNT NUMBER OF COILS (n)
+# OPTIONAL FILTERS (SAFE)
 # ================================
-count_df = (
-    df.groupby(
-        ["Product_Spec", "Material", "Top_Coatmass", "Order_Gauge"],
-        dropna=False
+with st.sidebar:
+    st.header("🔎 Filter (optional)")
+
+    spec_sel = st.multiselect(
+        "Product Spec",
+        sorted(df["Product_Spec"].dropna().unique())
     )
-    .size()
-    .reset_index(name="N_Coils")
-)
+
+    mat_sel = st.multiselect(
+        "Material",
+        sorted(df["Material"].dropna().unique())
+    )
+
+    if spec_sel:
+        df = df[df["Product_Spec"].isin(spec_sel)]
+    if mat_sel:
+        df = df[df["Material"].isin(mat_sel)]
 
 # ================================
-# GROUP LOGIC (MATERIAL LEVEL)
+# DISPLAY RAW COIL DATA
 # ================================
-GROUP_COLS = [
+st.subheader("📋 Coil-level Raw Data")
+st.write(f"Total coils: **{len(df)}**")
+
+display_cols = [
     "Product_Spec",
     "Material",
     "Top_Coatmass",
     "Order_Gauge",
+    "Hardness",
+    "YS",
+    "TS",
+    "EL",
 ]
 
-# ================================
-# AGGREGATION: MEAN + STDEV
-# ================================
-summary = (
-    df.groupby(GROUP_COLS)
-      .agg(
-          Hardness_mean=("Hardness", "mean"),
-          Hardness_stdev=("Hardness", "std"),
-          YS_mean=("YS", "mean"),
-          YS_stdev=("YS", "std"),
-          TS_mean=("TS", "mean"),
-          TS_stdev=("TS", "std"),
-          EL_mean=("EL", "mean"),
-          EL_stdev=("EL", "std"),
-      )
-      .reset_index()
+st.dataframe(
+    df[display_cols].reset_index(drop=True),
+    use_container_width=True
 )
 
-# ================================
-# MERGE COIL COUNT INTO SUMMARY
-# ================================
-summary = summary.merge(
-    count_df,
-    on=["Product_Spec", "Material", "Top_Coatmass", "Order_Gauge"],
-    how="left"
-)
-
-# ================================
-# DISPLAY
-# ================================
-st.subheader("📋 Material-level Summary (One condition per table)")
-st.caption(
-    "Each table represents ONLY ONE combination of "
-    "Material + Top Coatmass + Order Gauge. "
-    "Tables with more coils (n) are displayed first."
-)
-
-# ===== Product_Spec ORDER (more conditions first) =====
-spec_order = (
-    summary.groupby("Product_Spec")
-           .size()
-           .sort_values(ascending=False)
-           .index
-)
-
-for spec in spec_order:
-
-    st.markdown(f"## 🧱 Product Spec: `{spec}`")
-
-    df_spec = summary[summary["Product_Spec"] == spec]
-
-    # ===== SORT CONDITIONS BY SAMPLE SIZE =====
-    df_spec = df_spec.sort_values("N_Coils", ascending=False)
-
-    for _, row in df_spec.iterrows():
-
-        st.markdown(
-            f"### 🔹 Material: **{row['Material']}** | "
-            f"Coatmass: **{row['Top_Coatmass']}** | "
-            f"Gauge: **{row['Order_Gauge']}** "
-            f"➡️ **n = {int(row['N_Coils'])} coils**"
-        )
-
-        st.dataframe(
-            row.drop(
-                labels=[
-                    "Product_Spec",
-                    "Material",
-                    "Top_Coatmass",
-                    "Order_Gauge",
-                    "N_Coils",
-                ]
-            ).to_frame(name="Value"),
-            use_container_width=True
-        )
-
-st.success("✅ Report generated successfully (CÁCH 1 – One condition per table)")
+st.success("✅ Displayed RAW coil data only – no calculation applied")
