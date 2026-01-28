@@ -171,3 +171,38 @@ if task == "Summary (raw tables)":
         ]].sort_values("COIL_NO")
 
         st.dataframe(table_df, use_container_width=True)
+# ================================QA Strict Spec Check (1 NG = FAIL)
+if task == "QA Strict Spec Check (1 NG = FAIL)":
+
+    st.subheader("🧪 QA Strict Spec Result")
+    st.caption("Rule: If ANY coil is out of spec → FAIL")
+
+    def count_ng(series, std_min, std_max):
+        return ((series < std_min) | (series > std_max)).sum()
+
+    qa_summary = (
+        df
+        .groupby(GROUP_COLS)
+        .apply(lambda g: pd.Series({
+            "n_coils": g["COIL_NO"].nunique(),
+            "NG_LAB": count_ng(
+                g["Hardness_LAB"],
+                g["Std_Min"].iloc[0],
+                g["Std_Max"].iloc[0]
+            ),
+            "NG_LINE": count_ng(
+                g["Hardness_LINE"],
+                g["Std_Min"].iloc[0],
+                g["Std_Max"].iloc[0]
+            ),
+        }))
+        .reset_index()
+    )
+
+    qa_summary["QA_Result"] = np.where(
+        (qa_summary["NG_LAB"] > 0) | (qa_summary["NG_LINE"] > 0),
+        "FAIL",
+        "PASS"
+    )
+
+    st.dataframe(qa_summary, use_container_width=True)
