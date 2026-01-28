@@ -116,59 +116,56 @@ QC_GROUP = [
 ]
 
 # ================================
-# TABS
+# SINGLE QC TABLE (STRICT CONDITIONS)
 # ================================
-tabs = st.tabs([
-    "🧵 By COIL",
-    "🧱 QC-Level Population",
-    "🎨 By Coating",
-    "📏 By Thickness",
-    "⚠️ Spec Warning",
-])
+st.subheader("📋 QC-level Variability Table (STRICT)")
+st.caption(
+    "Each table satisfies simultaneously: QUALITY_CODE + PRODUCT SPECIFICATION CODE + HR STEEL GRADE + ORDER GAUGE + TOP COATMASS"
+)
 
-# -------- TAB 1: COIL --------
-with tabs[0]:
-    st.subheader("Variability by COIL_NO (coil-level)")
-    for col in ["Hardness", "YS", "TS", "EL"]:
-        st.markdown(f"### {col}")
-        st.dataframe(variability_table(["Coil_ID"], col))
+# ---- FILTER: MATERIAL LEVEL (optional selector) ----
+material_cols = [c for c in ["Quality", "Material", "Steel_Grade", "Thickness", "Coating"] if c in df_valid.columns]
 
-# -------- TAB 2: QC LEVEL --------
-with tabs[1]:
-    st.subheader("QC-level Variability")
-    st.caption("Grouped by: QUALITY_CODE + PRODUCT SPECIFICATION CODE + HR STEEL GRADE + ORDER GAUGE + TOP COATMASS")
-    for col in ["Hardness", "YS", "TS", "EL"]:
-        st.markdown(f"### {col}")
-        st.dataframe(variability_table(QC_GROUP, col))
+with st.expander("🔎 Filter material level"):
+    filters = {}
+    for c in material_cols:
+        options = sorted(df_valid[c].dropna().unique())
+        sel = st.multiselect(c, options, default=options)
+        filters[c] = sel
 
-# -------- TAB 3: COATING --------
-with tabs[2]:
-    st.subheader("Variability by Coating")
-    if "Coating" in df_valid.columns:
+filtered = df_valid.copy()
+for c, sel in filters.items():
+    filtered = filtered[filtered[c].isin(sel)]
+
+# ---- GROUP STRICTLY BY QC CONDITIONS ----
+QC_GROUP = [
+    "Quality",
+    "Material",
+    "Steel_Grade",
+    "Thickness",
+    "Coating",
+]
+QC_GROUP = [c for c in QC_GROUP if c in filtered.columns]
+
+# ---- BUILD ONE TABLE PER PRODUCT SPEC ----
+if "Material" not in filtered.columns:
+    st.error("PRODUCT SPECIFICATION CODE (Material) column missing")
+else:
+    for spec, dfg in filtered.groupby("Material"):
+        st.markdown(f"## 🧾 PRODUCT SPECIFICATION CODE: {spec}")
         for col in ["Hardness", "YS", "TS", "EL"]:
+            tbl = (
+                dfg.groupby(QC_GROUP)[col]
+                .agg(
+                    count="count",
+                    mean="mean",
+                    std="std",
+                    p10=lambda x: np.percentile(x, 10),
+                    p90=lambda x: np.percentile(x, 90),
+                )
+                .reset_index()
+            )
             st.markdown(f"### {col}")
-            st.dataframe(variability_table(["Coating"], col))
-    else:
-        st.info("Coating column not available")
+            st.dataframe(tbl)
 
-# -------- TAB 4: THICKNESS --------
-with tabs[3]:
-    st.subheader("Variability by Thickness")
-    if "Thickness" in df_valid.columns:
-        for col in ["Hardness", "YS", "TS", "EL"]:
-            st.markdown(f"### {col}")
-            st.dataframe(variability_table(["Thickness"], col))
-    else:
-        st.info("Thickness column not available")
-
-# -------- TAB 5: INVALID SPEC --------
-with tabs[4]:
-    st.subheader("⚠️ INVALID STANDARD HARDNESS")
-    st.write("These records are excluded from quantitative analysis")
-    st.dataframe(
-        df[df["Spec_status"] == "INVALID_SPEC"][
-            [c for c in ["Coil_ID", "Standard_Hardness", "Hardness"] if c in df.columns]
-        ]
-    )
-
-st.success("✅ Dashboard loaded successfully (COIL-based, QC-safe)")
+st.success("✅ Generated STRICT QC tables (one table per PRODUCT SPEC)")("✅ Dashboard loaded successfully (COIL-based, QC-safe)")
