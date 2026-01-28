@@ -126,12 +126,7 @@ if valid_conditions.empty:
 if task == "Summary (raw tables)":
 
     st.subheader("📋 Coil-level Data (Offline measurements only)")
-    st.caption(
-        "• 1 table = 1 Material + Coatmass + Gauge  \n"
-        "• Standard Hardness → Std_Min / Std_Max  \n"
-        "• No averaging, no SPC, no batch  \n"
-        "• ≥ 30 coils only"
-    )
+    st.caption("≥ 30 coils | No averaging | Raw data only")
 
     for _, cond in valid_conditions.iterrows():
 
@@ -169,7 +164,7 @@ if task == "Summary (raw tables)":
 if task == "QA Strict Spec Check (1 NG = FAIL)":
 
     st.subheader("🧪 QA Strict Spec Check – Coil level")
-    st.caption("Rule: If ANY coil is out of spec → Product FAIL")
+    st.caption("If ANY coil is out of spec → FAIL")
 
     for _, cond in valid_conditions.iterrows():
 
@@ -197,26 +192,27 @@ if task == "QA Strict Spec Check (1 NG = FAIL)":
 
         sub["COIL_NG"] = sub["NG_LAB"] | sub["NG_LINE"]
 
-        sub["OVER_LAB"]  = sub["Hardness_LAB"]  > hi
-        sub["OVER_LINE"] = sub["Hardness_LINE"] > hi
-        sub["UNDER_LAB"] = sub["Hardness_LAB"]  < lo
-        sub["UNDER_LINE"]= sub["Hardness_LINE"] < lo
+        # ===== DELTA & OUT OF LIMIT =====
+        sub["Δ_LINE_LAB"] = sub["Hardness_LINE"] - sub["Hardness_LAB"]
 
-        sub["COIL_OVER"]  = sub["OVER_LAB"]  | sub["OVER_LINE"]
-        sub["COIL_UNDER"] = sub["UNDER_LAB"] | sub["UNDER_LINE"]
+        sub["OOL_LAB"] = np.where(
+            sub["Hardness_LAB"] > hi, sub["Hardness_LAB"] - hi,
+            np.where(sub["Hardness_LAB"] < lo, lo - sub["Hardness_LAB"], 0)
+        )
 
-        n_out   = sub[sub["COIL_NG"]]["COIL_NO"].nunique()
-        n_over  = sub[sub["COIL_OVER"]]["COIL_NO"].nunique()
-        n_under = sub[sub["COIL_UNDER"]]["COIL_NO"].nunique()
+        sub["OOL_LINE"] = np.where(
+            sub["Hardness_LINE"] > hi, sub["Hardness_LINE"] - hi,
+            np.where(sub["Hardness_LINE"] < lo, lo - sub["Hardness_LINE"], 0)
+        )
 
+        n_out = sub[sub["COIL_NG"]]["COIL_NO"].nunique()
         qa_result = "FAIL" if n_out > 0 else "PASS"
 
         st.markdown(
             f"## 🧱 Product Spec: `{spec}`  \n"
             f"**Material:** {mat} | **Coatmass:** {coat} | **Gauge:** {gauge}  \n"
             f"➡️ **n = {n} coils**  \n"
-            f"❌ **n_out = {n_out}** "
-            f"(⬆️ over = {n_over}, ⬇️ under = {n_under})  \n"
+            f"❌ **n_out = {n_out} coils out of spec**  \n"
             f"🧪 **QA Result:** `{qa_result}`"
         )
 
@@ -224,6 +220,8 @@ if task == "QA Strict Spec Check (1 NG = FAIL)":
             "COIL_NO",
             "Std_Min", "Std_Max",
             "Hardness_LAB", "Hardness_LINE",
+            "Δ_LINE_LAB",
+            "OOL_LAB", "OOL_LINE",
             "NG_LAB", "NG_LINE",
             "YS", "TS", "EL"
         ]
