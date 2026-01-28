@@ -29,7 +29,7 @@ raw = load_data(DATA_URL)
 column_mapping = {
     "PRODUCT SPECIFICATION CODE": "Product_Spec",
     "HR STEEL GRADE": "Material",
-    "TOP COATMASS": "Top_Coatmass",
+    "TOP TOP TOP COATMASS": "Top_TOP COATMASS",
     "ORDER GAUGE": "Order_Gauge",
     "COIL NO": "COIL_NO",
     "QUALITY_CODE": "Quality_Code",
@@ -47,7 +47,7 @@ df = raw.rename(columns={k: v for k, v in column_mapping.items() if k in raw.col
 # REQUIRED COLUMNS CHECK
 # ================================
 required_cols = [
-    "Product_Spec", "Material", "Top_Coatmass", "Order_Gauge",
+    "Product_Spec", "Material", "Top_TOP COATMASS", "Order_Gauge",
     "COIL_NO", "Quality_Code",
     "Std_Range_Text", "Hardness_LAB", "Hardness_LINE",
     "YS", "TS", "EL"
@@ -107,7 +107,7 @@ df = df[df["Quality_Code"] == selected_qc]
 # ================================
 # GROUP CONDITIONS (STRICT)
 # ================================
-GROUP_COLS = ["Product_Spec", "Material", "Top_Coatmass", "Order_Gauge"]
+GROUP_COLS = ["Product_Spec", "Material", "Top_TOP COATMASS", "Order_Gauge"]
 
 # ================================
 # COUNT COILS PER CONDITION
@@ -134,7 +134,7 @@ if task == "Summary (raw tables)":
 
     st.subheader("📋 Coil-level Data (Offline measurements only)")
     st.caption(
-        "• 1 table = 1 Material + Coatmass + Gauge  \n"
+        "• 1 table = 1 Material + TOP COATMASS + Gauge  \n"
         "• Standard Hardness → Std_Min / Std_Max  \n"
         "• No averaging, no SPC, no batch  \n"
         "• ≥ 30 coils only"
@@ -145,21 +145,21 @@ if task == "Summary (raw tables)":
         spec, mat, coat, gauge, n = (
             cond["Product_Spec"],
             cond["Material"],
-            cond["Top_Coatmass"],
+            cond["Top_TOP COATMASS"],
             cond["Order_Gauge"],
             int(cond["N_Coils"])
         )
 
         st.markdown(
             f"## 🧱 Product Spec: `{spec}`  \n"
-            f"**Material:** {mat} | **Coatmass:** {coat} | **Gauge:** {gauge}  \n"
+            f"**Material:** {mat} | **TOP COATMASS:** {coat} | **Gauge:** {gauge}  \n"
             f"➡️ **n = {n} coils**"
         )
 
         table_df = df[
             (df["Product_Spec"] == spec) &
             (df["Material"] == mat) &
-            (df["Top_Coatmass"] == coat) &
+            (df["Top_TOP COATMASS"] == coat) &
             (df["Order_Gauge"] == gauge)
         ][[
             "COIL_NO",
@@ -192,7 +192,7 @@ if task == "QA Strict Spec Check (1 NG = FAIL)":
         std_max = df_spec["Std_Max"].iloc[0]
 
         material  = df_spec["Material"].iloc[0]
-        coatmass  = df_spec["Coatmass"].iloc[0]
+        TOP COATMASS  = df_spec["TOP COATMASS"].iloc[0]
         gauge     = df_spec["Gauge"].iloc[0]
 
         # ===== XÁC ĐỊNH NG =====
@@ -219,7 +219,7 @@ if task == "QA Strict Spec Check (1 NG = FAIL)":
         header_md = f"""
 ## 🧱 Product Spec: `{spec}`
 
-**Material:** {material} | **Coatmass:** {coatmass} | **Gauge:** {gauge}
+**Material:** {material} | **TOP COATMASS:** {TOP COATMASS} | **Gauge:** {gauge}
 
 ❌ **n = {n_ng} coils out of spec**
 
