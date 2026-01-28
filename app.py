@@ -165,6 +165,8 @@ if task == "Summary (raw tables)":
 # =========================================================
 # QA STRICT SPEC CHECK
 # =========================================================
+# QA STRICT SPEC CHECK
+# =========================================================
 if task == "QA Strict Spec Check (1 NG = FAIL)":
 
     st.subheader("🧪 QA Strict Spec Check – Coil level")
@@ -176,32 +178,32 @@ if task == "QA Strict Spec Check (1 NG = FAIL)":
         return (val < std_min) or (val > std_max)
 
     for (spec, material, coatmass, gauge), df_spec in df.groupby(
-    ["Product_Spec", "Material", "Top_Coatmass", "Order_Gauge"]
-):
+        ["Product_Spec", "Material", "Top_Coatmass", "Order_Gauge"]
+    ):
 
-    df_spec = df_spec.copy()
+        df_spec = df_spec.copy()
 
-    std_min = df_spec["Std_Min"].iloc[0]
-    std_max = df_spec["Std_Max"].iloc[0]
+        std_min = df_spec["Std_Min"].iloc[0]
+        std_max = df_spec["Std_Max"].iloc[0]
 
-    df_spec["NG_LAB"] = df_spec["Hardness_LAB"].apply(
-        lambda x: is_ng(x, std_min, std_max)
-    )
-    df_spec["NG_LINE"] = df_spec["Hardness_LINE"].apply(
-        lambda x: is_ng(x, std_min, std_max)
-    )
+        df_spec["NG_LAB"] = df_spec["Hardness_LAB"].apply(
+            lambda x: is_ng(x, std_min, std_max)
+        )
+        df_spec["NG_LINE"] = df_spec["Hardness_LINE"].apply(
+            lambda x: is_ng(x, std_min, std_max)
+        )
 
-    df_spec["COIL_NG"] = df_spec["NG_LAB"] | df_spec["NG_LINE"]
+        df_spec["COIL_NG"] = df_spec["NG_LAB"] | df_spec["NG_LINE"]
 
-    df_ng = (
-        df_spec[df_spec["COIL_NG"]]
-        .drop_duplicates(subset="COIL_NO")
-    )
+        df_ng = (
+            df_spec[df_spec["COIL_NG"]]
+            .drop_duplicates(subset="COIL_NO")
+        )
 
-    n_ng = df_ng["COIL_NO"].nunique()
-    qa_result = "FAIL" if n_ng > 0 else "PASS"
+        n_ng = df_ng["COIL_NO"].nunique()
+        qa_result = "FAIL" if n_ng > 0 else "PASS"
 
-    header_md = f"""
+        header_md = f"""
 ## 🧱 Product Spec: `{spec}`
 
 **Material:** {material} | **Coatmass:** {coatmass} | **Gauge:** {gauge}
@@ -210,21 +212,17 @@ if task == "QA Strict Spec Check (1 NG = FAIL)":
 
 🧪 **QA Result:** `{qa_result}`
 """
-    st.markdown(header_md)
+        st.markdown(header_md)
 
-    show_cols = [
-        "COIL_NO",
-        "Std_Min", "Std_Max",
-        "Hardness_LAB", "Hardness_LINE",
-        "YS", "TS", "EL",
-        "COIL_NG"
-    ]
+        show_cols = [
+            "COIL_NO",
+            "Std_Min", "Std_Max",
+            "Hardness_LAB", "Hardness_LINE",
+            "YS", "TS", "EL",
+            "COIL_NG"
+        ]
 
-    st.dataframe(
-        df_spec[show_cols].sort_values("COIL_NO"),
-        use_container_width=True
-    )
-
+        st.dataframe(
             df_spec[show_cols].sort_values("COIL_NO"),
             use_container_width=True
         )
