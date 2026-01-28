@@ -1,209 +1,265 @@
+# =============================================================
+# SPC DASHBOARD – FINAL VERSION (SPEC-SAFE, AUDIT-READY)
+# Author: ChatGPT (QC-oriented implementation)
+# =============================================================
+# PRINCIPLES
+# 1) NEVER DROP INVALID SPEC DATA
+# 2) INVALID_SPEC = WARNING ONLY (NO QUANT ANALYSIS)
+# 3) SPC & STATISTICS USE VALID_SPEC ONLY
+# =============================================================
+
 import streamlit as st
 import pandas as pd
 import numpy as np
+import matplotlib.pyplot as plt
+import re
 
-# =========================
+# =============================================================
 # PAGE CONFIG
-# =========================
-st.set_page_config(page_title="GI Hardness Control", layout="wide")
+# =============================================================
+st.set_page_config(
+    page_title="SPC Dashboard – FINAL",
+    layout="wide"
+)
 
-# =========================
+st.title("📊 SPC Dashboard – Spec-safe & Audit-ready")
+
+# =============================================================
+# UTILITIES
+# =============================================================
+
+def parse_spec_range(spec):
+    """
+    Parse spec in form 'a~b'
+    Return (Hmin, Hmax, status)
+    """
+    if pd.isna(spec):
+        return np.nan, np.nan, "INVALID_SPEC"
+
+    spec = str(spec).strip()
+    match = re.match(r"^\s*([0-9]+\.?[0-9]*)\s*~\s*([0-9]+\.?[0-9]*)\s*$", spec)
+    if match:
+        return float(match.group(1)), float(match.group(2)), "VALID_SPEC"
+    else:
+        return np.nan, np.nan, "INVALID_SPEC"
+
+
+def safe_spc_stats(df, value_col):
+    """
+    Calculate SPC statistics safely
+    ONLY for VALID_SPEC
+    """
+    if df.empty:
+        return None
+
+    x = df[value_col].dropna()
+    if len(x) < 2:
+        return None
+
+    mean = x.mean()
+    std = x.std(ddof=1)
+    return {
+        "mean": mean,
+        "std": std,
+        "ucl": mean + 3 * std,
+        "lcl": mean - 3 * std,
+        "p10": np.percentile(x, 10),
+        "p90": np.percentile(x, 90)
+    }
+
+
+# =============================================================
+# SIDEBAR – LOAD DATA
+# =============================================================
+st.sidebar.header("📂 Data Input")
+file = st.sidebar.file_uploader("Upload CSV", type=["csv"])
+
+if file is None:
+    st.info("Please upload CSV file to start.")
+    st.stop()
+
+# =============================================================
 # LOAD DATA
-# =========================
-@st.cache_data
-def load_data():
-    url = "https://docs.google.com/spreadsheets/d/1GdnY09hJ2qVHuEBAIJ-eU6B5z8ZdgcGf4P7ZjlAt4JI/export?format=csv"
-    df = pd.read_csv(url)
+# =============================================================
+df = pd.read_csv(file)
 
-    # --- strip column names ---
-    df.columns = [c.strip() for c in df.columns]
-
-    # --- parse Standard Hardness: "56~62" ---
-    def parse_spec(x):
-        try:
-            if isinstance(x, str) and "~" in x:
-                a, b = x.split("~")
-                return float(a), float(b)
-        except:
-            pass
-        return np.nan, np.nan
-
-    df[["Hmin_spec", "Hmax_spec"]] = df["Standard Hardness"].apply(
-        lambda x: pd.Series(parse_spec(x))
-    )
-
-    df["Spec_status"] = np.where(
-        df["Hmin_spec"].isna() | df["Hmax_spec"].isna(),
-        "INVALID_SPEC",
-        "VALID_SPEC"
-    )
-
-    # --- numeric columns ---
-    num_cols = [
-        "ORDER GAUGE",
-        "TOP COATMASS",
-        "HARDNESS 冶金",
-        "HARDNESS 鍍鋅線 C",
-        "TENSILE_YIELD",
-        "TENSILE_TENSILE",
-        "TENSILE_ELONG"
-    ]
-    for c in num_cols:
-        if c in df.columns:
-            df[c] = pd.to_numeric(df[c], errors="coerce")
-
-    return df
-
-df = load_data()
-
-# =========================
-# SIDEBAR FILTERS (SAFE)
-# =========================
-st.sidebar.header("Filters")
-
-def safe_multiselect(label, series):
-    opts = sorted(series.dropna().unique().tolist())
-    if len(opts) == 0:
-        return []
-    return st.sidebar.multiselect(label, opts, default=opts)
-
-f_quality = safe_multiselect("QUALITY_CODE", df["QUALITY_CODE"])
-f_spec    = safe_multiselect("PRODUCT SPECIFICATION CODE", df["PRODUCT SPECIFICATION CODE"])
-f_grade   = safe_multiselect("HR STEEL GRADE", df["HR STEEL GRADE"])
-f_gauge   = safe_multiselect("ORDER GAUGE", df["ORDER GAUGE"])
-f_coat    = safe_multiselect("TOP COATMASS", df["TOP COATMASS"])
-
-df_f = df[
-    df["QUALITY_CODE"].isin(f_quality)
-    & df["PRODUCT SPECIFICATION CODE"].isin(f_spec)
-    & df["HR STEEL GRADE"].isin(f_grade)
-    & df["ORDER GAUGE"].isin(f_gauge)
-    & df["TOP COATMASS"].isin(f_coat)
+required_cols = [
+    "Coil_ID",
+    "Batch",
+    "Hardness",
+    "Standard Hardness",
+    "YS",
+    "TS",
+    "EL"
 ]
 
-if df_f.empty:
-    st.warning("Filter too strict – fallback to full dataset")
-    df_f = df.copy()
+missing = [c for c in required_cols if c not in df.columns]
+if missing:
+    st.error(f"Missing required columns: {missing}")
+    st.stop()
 
-# =========================
-# DERIVED VALUES (ONLY VALID SPEC)
-# =========================
-df_v = df_f[df_f["Spec_status"] == "VALID_SPEC"].copy()
+# =============================================================
+# SPEC PARSING (CORE LOGIC)
+# =============================================================
+df[["Hmin_spec", "Hmax_spec", "Spec_status"]] = df[
+    "Standard Hardness"
+].apply(lambda x: pd.Series(parse_spec_range(x)))
 
-df_v["ΔH_LAB_high"]  = df_v["HARDNESS 冶金"] - df_v["Hmax_spec"]
-df_v["ΔH_LINE_high"] = df_v["HARDNESS 鍍鋅線 C"] - df_v["Hmax_spec"]
-df_v["ΔH_LINE_LAB"]  = df_v["HARDNESS 鍍鋅線 C"] - df_v["HARDNESS 冶金"]
+# =============================================================
+# DATA PARTITION
+# =============================================================
+df_valid = df[df["Spec_status"] == "VALID_SPEC"].copy()
+df_invalid = df[df["Spec_status"] == "INVALID_SPEC"].copy()
 
-# =========================
+# =============================================================
 # TABS
-# =========================
+# =============================================================
 tab1, tab2, tab3, tab4, tab5 = st.tabs([
-    "Overview",
-    "Hardness",
-    "Mechanical",
-    "Group Summary",
-    "Spec Warning"
+    "🏠 Overview",
+    "🟢 Hardness SPC",
+    "🟢 Mechanical SPC",
+    "🔴 Spec Warning",
+    "📋 Raw Data"
 ])
 
-# =========================
+# =============================================================
 # TAB 1 – OVERVIEW
-# =========================
+# =============================================================
 with tab1:
     st.subheader("Overview")
 
     col1, col2, col3 = st.columns(3)
+    col1.metric("Total Records", len(df))
+    col2.metric("VALID_SPEC", len(df_valid))
+    col3.metric("INVALID_SPEC", len(df_invalid))
 
-    col1.metric("Total Coils", len(df_f))
-    col2.metric("Valid Spec", (df_f["Spec_status"] == "VALID_SPEC").sum())
-    col3.metric("Invalid Spec", (df_f["Spec_status"] == "INVALID_SPEC").sum())
+    st.markdown("""
+    **Rules applied:**
+    - INVALID_SPEC is **kept for warning only**
+    - SPC / statistics use **VALID_SPEC only**
+    - No silent data cleaning
+    """)
 
-    if len(df_v) > 0:
-        p10 = np.percentile(df_v["ΔH_LINE_high"].dropna(), 10)
-        st.metric("LINE ΔH vs Hmax (P10)", f"{p10:.2f} HRB")
-
-# =========================
-# TAB 2 – HARDNESS
-# =========================
+# =============================================================
+# TAB 2 – HARDNESS SPC
+# =============================================================
 with tab2:
-    st.subheader("Hardness Analysis (VALID SPEC ONLY)")
+    st.subheader("Hardness SPC (VALID_SPEC only)")
 
-    show_cols = [
-        "QUALITY_CODE",
-        "PRODUCT SPECIFICATION CODE",
-        "HR STEEL GRADE",
-        "ORDER GAUGE",
-        "TOP COATMASS",
-        "Hmin_spec",
-        "Hmax_spec",
-        "HARDNESS 冶金",
-        "HARDNESS 鍍鋅線 C",
-        "ΔH_LAB_high",
-        "ΔH_LINE_high",
-        "ΔH_LINE_LAB"
-    ]
-    st.dataframe(df_v[show_cols])
+    stats = safe_spc_stats(df_valid, "Hardness")
 
-# =========================
-# TAB 3 – MECHANICAL
-# =========================
+    if stats is None:
+        st.warning("Not enough VALID_SPEC data for SPC analysis")
+    else:
+        fig, ax = plt.subplots(figsize=(10, 4))
+        ax.plot(df_valid.index + 1, df_valid["Hardness"], marker="o")
+        ax.axhline(stats["mean"], linestyle="--", label="Mean")
+        ax.axhline(stats["ucl"], linestyle=":", label="UCL")
+        ax.axhline(stats["lcl"], linestyle=":", label="LCL")
+        ax.set_xlabel("Sample")
+        ax.set_ylabel("Hardness")
+        ax.legend()
+        st.pyplot(fig)
+
+        st.json(stats)
+
+# =============================================================
+# TAB 3 – MECHANICAL SPC (YS / TS / EL)
+# =============================================================
 with tab3:
-    st.subheader("Mechanical Properties")
+    st.subheader("Mechanical Properties SPC (VALID_SPEC only)")
 
-    mech_cols = [
-        "QUALITY_CODE",
-        "ORDER GAUGE",
-        "TOP COATMASS",
-        "HARDNESS 鍍鋅線 C",
-        "TENSILE_YIELD",
-        "TENSILE_TENSILE",
-        "TENSILE_ELONG"
-    ]
-    st.dataframe(df_v[mech_cols])
+    for col in ["YS", "TS", "EL"]:
+        st.markdown(f"### {col}")
+        stats = safe_spc_stats(df_valid, col)
 
-# =========================
-# TAB 4 – GROUP SUMMARY
-# =========================
+        if stats is None:
+            st.warning(f"Not enough data for {col}")
+            continue
+
+        fig, ax = plt.subplots(figsize=(10, 3))
+        ax.plot(df_valid.index + 1, df_valid[col], marker="o")
+        ax.axhline(stats["mean"], linestyle="--")
+        ax.axhline(stats["ucl"], linestyle=":")
+        ax.axhline(stats["lcl"], linestyle=":")
+        ax.set_ylabel(col)
+        st.pyplot(fig)
+
+# =============================================================
+# TAB 4 – SPEC WARNING
+# =============================================================
 with tab4:
-    st.subheader("Group Mean Summary")
+    st.subheader("⚠️ INVALID SPEC – WARNING ONLY")
 
-    group_cols = [
-        "QUALITY_CODE",
-        "PRODUCT SPECIFICATION CODE",
-        "HR STEEL GRADE",
-        "ORDER GAUGE",
-        "TOP COATMASS"
-    ]
+    st.markdown("""
+    - These records are **NOT used** for SPC or statistics
+    - Purpose:
+        - QC warning
+        - Spec input error detection
+        - Master data governance
+    """)
 
-    summary = (
-        df_v
-        .groupby(group_cols)
-        .agg(
-            coils=("HARDNESS 冶金", "count"),
-            H_LAB_mean=("HARDNESS 冶金", "mean"),
-            H_LINE_mean=("HARDNESS 鍍鋅線 C", "mean"),
-            ΔH_LINE_P10=("ΔH_LINE_high", lambda x: np.percentile(x.dropna(), 10) if len(x.dropna()) > 0 else np.nan),
-            YS_mean=("TENSILE_YIELD", "mean"),
-            TS_mean=("TENSILE_TENSILE", "mean"),
-            EL_mean=("TENSILE_ELONG", "mean")
-        )
-        .reset_index()
+    st.dataframe(
+        df_invalid[[
+            "Coil_ID",
+            "Batch",
+            "Standard Hardness",
+            "Hardness"
+        ]]
     )
 
-    st.dataframe(summary)
-
-# =========================
-# TAB 5 – SPEC WARNING
-# =========================
+# =============================================================
+# TAB 5 – VARIABILITY TABLES (BY LEVELS)
+# =============================================================
 with tab5:
-    st.subheader("INVALID STANDARD HARDNESS")
+    st.subheader("📐 Variability Tables by Level (VALID_SPEC only)")
 
-    warn_cols = [
-        "QUALITY_CODE",
-        "PRODUCT SPECIFICATION CODE",
-        "HR STEEL GRADE",
-        "ORDER GAUGE",
-        "TOP COATMASS",
-        "Standard Hardness"
-    ]
+    st.markdown("""
+    Các bảng dưới đây **chỉ dùng VALID_SPEC** để đánh giá **độ biến động (variability)**.
+    Mỗi bảng tương ứng **một cấp độ phân tích** khác nhau.
+    """)
 
-    st.dataframe(df_f[df_f["Spec_status"] == "INVALID_SPEC"][warn_cols])
+    df_v = df_valid.copy()
+
+    def variability_table(group_cols, value_col):
+        return (
+            df_v
+            .groupby(group_cols)[value_col]
+            .agg([
+                ("count", "count"),
+                ("mean", "mean"),
+                ("std", "std"),
+                ("min", "min"),
+                ("max", "max")
+            ])
+            .reset_index()
+        )
+
+    # -------- LEVEL 1: MATERIAL --------
+    st.markdown("### 🧱 By Material")
+    for col in ["Hardness", "TS", "YS", "EL"]:
+        st.markdown(f"**{col}**")
+        st.dataframe(variability_table(["Material"], col))
+
+    # -------- LEVEL 2: MATERIAL + COATING --------
+    st.markdown("### 🎨 By Material + Coating")
+    for col in ["Hardness", "TS", "YS", "EL"]:
+        st.markdown(f"**{col}**")
+        st.dataframe(variability_table(["Material", "Coating"], col))
+
+    # -------- LEVEL 3: MATERIAL + COATING + THICKNESS --------
+    st.markdown("### 📏 By Material + Coating + Thickness")
+    for col in ["Hardness", "TS", "YS", "EL"]:
+        st.markdown(f"**{col}**")
+        st.dataframe(variability_table(["Material", "Coating", "Thickness"], col))
+
+# =============================================================
+# END OF FILE
+# =============================================================
+with tab5:
+    st.subheader("Raw Data (Full, Unfiltered)")
+    st.dataframe(df)
+
+# =============================================================
+# END OF FILE
+# =============================================================
