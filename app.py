@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+import numpy as np
 import requests
 from io import StringIO
 
@@ -8,11 +9,8 @@ from io import StringIO
 # ================================
 DATA_URL = "https://docs.google.com/spreadsheets/d/1GdnY09hJ2qVHuEBAIJ-eU6B5z8ZdgcGf4P7ZjlAt4JI/export?format=csv"
 
-st.set_page_config(
-    page_title="Mechanical Raw Data – One Condition Only",
-    layout="wide"
-)
-st.title("📋 Mechanical Properties – Coil Level (One Condition per Table)")
+st.set_page_config(page_title="Material-level Hardness Detail", layout="wide")
+st.title("📊 Material-level Hardness & Mechanical Detail (Offline only)")
 
 # ================================
 # LOAD DATA
@@ -26,141 +24,138 @@ def load_data(url):
 raw = load_data(DATA_URL)
 
 # ================================
-# COIL NO AUTO DETECT
-# ================================
-coil_candidates = ["COIL NO", "COIL_NO", "COIL", "COIL NUMBER", "卷號"]
-coil_col = next((c for c in coil_candidates if c in raw.columns), None)
-
-if coil_col is None:
-    st.error("❌ Không tìm thấy cột COIL NO")
-    st.stop()
-
-# ================================
 # COLUMN MAPPING
 # ================================
 column_mapping = {
-    coil_col: "Coil_No",
     "PRODUCT SPECIFICATION CODE": "Product_Spec",
     "HR STEEL GRADE": "Material",
     "TOP COATMASS": "Top_Coatmass",
     "ORDER GAUGE": "Order_Gauge",
+    "COIL NO": "COIL_NO",
     "QUALITY_CODE": "Quality_Code",
-    "HARDNESS 冶金": "Hardness",
+    "Standard Hardness": "Std_Range_Text",
+    "HARDNESS 冶金": "Hardness_LAB",
+    "HARDNESS 鍍鋅線 C": "Hardness_LINE",
     "TENSILE_YIELD": "YS",
     "TENSILE_TENSILE": "TS",
     "TENSILE_ELONG": "EL",
 }
 
-df = raw.rename(
-    columns={k: v for k, v in column_mapping.items() if k in raw.columns}
-)
+df = raw.rename(columns={k: v for k, v in column_mapping.items() if k in raw.columns})
 
 # ================================
-# CHECK REQUIRED COLUMNS
+# REQUIRED COLUMNS CHECK
 # ================================
-required = [
-    "Coil_No",
-    "Product_Spec",
-    "Material",
-    "Top_Coatmass",
-    "Order_Gauge",
-    "Quality_Code",
-    "Hardness",
-    "YS",
-    "TS",
-    "EL",
+required_cols = [
+    "Product_Spec", "Material", "Top_Coatmass", "Order_Gauge",
+    "COIL_NO", "Quality_Code",
+    "Std_Range_Text", "Hardness_LAB", "Hardness_LINE",
+    "YS", "TS", "EL"
 ]
 
-missing = [c for c in required if c not in df.columns]
+missing = [c for c in required_cols if c not in df.columns]
 if missing:
     st.error(f"❌ Missing required columns: {missing}")
     st.stop()
 
 # ================================
-# FORCE NUMERIC (DISPLAY ONLY)
+# SPLIT STANDARD HARDNESS TEXT → MIN / MAX
 # ================================
-for c in ["Hardness", "YS", "TS", "EL"]:
+def split_std_range(x):
+    if isinstance(x, str) and "~" in x:
+        try:
+            lo, hi = x.split("~")
+            return pd.Series([float(lo), float(hi)])
+        except:
+            return pd.Series([np.nan, np.nan])
+    return pd.Series([np.nan, np.nan])
+
+df[["Std_Min", "Std_Max"]] = df["Std_Range_Text"].apply(split_std_range)
+
+# ❌ DROP ORIGINAL STANDARD HARDNESS COLUMN
+df = df.drop(columns=["Std_Range_Text"])
+
+# ================================
+# FORCE NUMERIC (OFFLINE MEASUREMENTS)
+# ================================
+for c in ["Hardness_LAB", "Hardness_LINE", "YS", "TS", "EL"]:
     df[c] = pd.to_numeric(df[c], errors="coerce")
 
 # ================================
-# SIDEBAR FILTER – QUALITY CODE
+# QUALITY CODE FILTER (BUTTON STYLE)
 # ================================
-# SIDEBAR FILTER – QUALITY CODE (RADIO BUTTON)
+st.sidebar.header("🎛 QUALITY CODE")
+quality_codes = sorted(df["Quality_Code"].dropna().unique())
+selected_qc = st.sidebar.radio("Select Quality Code", quality_codes)
+
+df = df[df["Quality_Code"] == selected_qc]
+
 # ================================
-with st.sidebar:
-    st.header("🎛 QUALITY CODE")
+# GROUP CONDITIONS (STRICT)
+# ================================
+GROUP_COLS = ["Product_Spec", "Material", "Top_Coatmass", "Order_Gauge"]
 
-    qc_list = sorted(df["Quality_Code"].dropna().unique())
+# ================================
+# COUNT COILS PER CONDITION
+# ================================
+count_df = (
+    df.groupby(GROUP_COLS)
+      .agg(N_Coils=("COIL_NO", "nunique"))
+      .reset_index()
+)
 
-    qc_selected = st.radio(
-        "Chọn QUALITY_CODE",
-        qc_list,
-        index=0
+# ================================
+# ONLY CONDITIONS WITH >= 30 COILS
+# ================================
+valid_conditions = count_df[count_df["N_Coils"] >= 30]
+
+if valid_conditions.empty:
+    st.warning("⚠️ No condition has ≥ 30 coils")
+    st.stop()
+
+valid_conditions = valid_conditions.sort_values("N_Coils", ascending=False)
+
+# ================================
+# DISPLAY TABLES
+# ================================
+st.subheader("📋 Coil-level Data (Offline measurements only)")
+st.caption(
+    "• 1 table = 1 Material + Coatmass + Gauge  \n"
+    "• Standard Hardness → Std_Min / Std_Max  \n"
+    "• No averaging, no SPC, no batch  \n"
+    "• ≥ 30 coils only"
+)
+
+for _, cond in valid_conditions.iterrows():
+
+    spec, mat, coat, gauge, n = (
+        cond["Product_Spec"],
+        cond["Material"],
+        cond["Top_Coatmass"],
+        cond["Order_Gauge"],
+        int(cond["N_Coils"])
     )
 
-    df = df[df["Quality_Code"] == qc_selected]
+    st.markdown(
+        f"## 🧱 Product Spec: `{spec}`  \n"
+        f"**Material:** {mat} | **Coatmass:** {coat} | **Gauge:** {gauge}  \n"
+        f"➡️ **n = {n} coils**"
+    )
 
-
-# ================================
-# ONE CONDITION = ONE TABLE
-# ================================
-GROUP_COLS = [
-    "Product_Spec",
-    "Material",
-    "Top_Coatmass",
-    "Order_Gauge",
-]
-
-condition_order = (
-    df.groupby(GROUP_COLS)
-      .size()
-      .reset_index(name="N_Coils")
-      .query("N_Coils >= 30")
-      .sort_values("N_Coils", ascending=False)
-)
-
-
-# ================================
-# DISPLAY
-# ================================
-st.caption(
-    "Raw coil-level data only. "
-    "Filtered by QUALITY_CODE. "
-    "Each table contains ONE condition only."
-)
-
-for _, cond in condition_order.iterrows():
-
-    spec = cond["Product_Spec"]
-    mat = cond["Material"]
-    coat = cond["Top_Coatmass"]
-    gauge = cond["Order_Gauge"]
-    n = int(cond["N_Coils"])
-
-    df_cond = df[
+    table_df = df[
         (df["Product_Spec"] == spec) &
         (df["Material"] == mat) &
         (df["Top_Coatmass"] == coat) &
         (df["Order_Gauge"] == gauge)
-    ]
+    ][[
+        "COIL_NO",
+        "Std_Min",
+        "Std_Max",
+        "Hardness_LAB",
+        "Hardness_LINE",
+        "YS", "TS", "EL"
+    ]].sort_values("COIL_NO")
 
-    st.markdown(
-        f"## 🧱 {spec} | {mat} | Coatmass {coat} | Gauge {gauge} "
-        f"(n = {n} coils)"
-    )
+    st.dataframe(table_df, use_container_width=True)
 
-    st.dataframe(
-        df_cond[
-            [
-                "Coil_No",
-                "Quality_Code",
-                "Hardness",
-                "YS",
-                "TS",
-                "EL",
-            ]
-        ],
-        use_container_width=True
-    )
-
-st.success("✅ QUALITY_CODE filter applied – logic intact")
+st.success("✅ Clean report generated – đúng logic nghiệp vụ")
