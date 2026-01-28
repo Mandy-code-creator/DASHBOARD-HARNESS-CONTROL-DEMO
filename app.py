@@ -89,14 +89,27 @@ summary = (
 # ================================
 st.subheader("📋 Material-level Summary by Product Specification")
 st.caption(
-    "Each table represents ONE Product Spec. "
+    "Product Specs with more data are displayed first. "
     "Grouped by Material + Top Coatmass + Order Gauge"
 )
 
-# ===== LOOP BY PRODUCT SPEC =====
-for spec, df_spec in summary.groupby("Product_Spec"):
+# ===== COUNT GROUP SIZE PER PRODUCT SPEC =====
+spec_order = (
+    summary.groupby("Product_Spec")
+           .size()
+           .sort_values(ascending=False)
+           .index
+)
 
-    st.markdown(f"### 🧱 Product Spec: `{spec}`")
+# ===== DISPLAY TABLES IN THAT ORDER =====
+for spec in spec_order:
+
+    df_spec = summary[summary["Product_Spec"] == spec]
+
+    st.markdown(
+        f"### 🧱 Product Spec: `{spec}` "
+        f"(Groups: {len(df_spec)})"
+    )
 
     st.dataframe(
         df_spec.drop(columns=["Product_Spec"]),
