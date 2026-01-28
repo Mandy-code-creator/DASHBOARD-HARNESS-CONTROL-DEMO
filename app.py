@@ -88,14 +88,19 @@ for c in ["Hardness", "YS", "TS", "EL"]:
 with st.sidebar:
     st.header("🎛 Filter")
 
+    with st.sidebar:
+    st.header("🎛 QUALITY CODE")
+
     qc_list = sorted(df["Quality_Code"].dropna().unique())
-    qc_sel = st.multiselect(
-        "QUALITY_CODE",
+
+    qc_selected = st.radio(
+        "Chọn QUALITY_CODE",
         qc_list,
-        default=qc_list
+        index=0
     )
 
-    df = df[df["Quality_Code"].isin(qc_sel)]
+    df = df[df["Quality_Code"] == qc_selected]
+
 
 # ================================
 # ONE CONDITION = ONE TABLE
