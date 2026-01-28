@@ -216,12 +216,12 @@ if task == "QA Strict Spec Check (1 NG = FAIL)":
 
         # ===== HEADER =====
               header_md = f"""
-## 🧱 Product Spec: `{spec}`
-
-**Material:** {material} | **Coatmass:** {coatmass} | **Gauge:** {gauge}
-
-❌ **n = {n_ng} coils out of spec**
-
-🧪 **QA Result:** `{qa_result}`
-"""
-        st.markdown(header_md)
+    ## 🧱 Product Spec: `{spec}`
+    
+    **Material:** {material} | **Coatmass:** {coatmass} | **Gauge:** {gauge}
+    
+    ❌ **n = {n_ng} coils out of spec**
+    
+    🧪 **QA Result:** `{qa_result}`
+    """
+            st.markdown(header_md)
