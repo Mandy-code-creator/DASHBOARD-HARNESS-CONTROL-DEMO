@@ -87,13 +87,13 @@ summary = (
 )
 
 # ================================
-st.subheader("📋 Material-level Summary by Product Specification")
+st.subheader("📋 Material-level Summary (One condition per table)")
 st.caption(
-    "Product Specs with more data are displayed first. "
-    "Grouped by Material + Top Coatmass + Order Gauge"
+    "Each table contains ONLY ONE combination of "
+    "Material + Top Coatmass + Order Gauge"
 )
 
-# ===== COUNT GROUP SIZE PER PRODUCT SPEC =====
+# ===== Product_Spec ORDER (more data first) =====
 spec_order = (
     summary.groupby("Product_Spec")
            .size()
@@ -101,17 +101,26 @@ spec_order = (
            .index
 )
 
-# ===== DISPLAY TABLES IN THAT ORDER =====
 for spec in spec_order:
+
+    st.markdown(f"## 🧱 Product Spec: `{spec}`")
 
     df_spec = summary[summary["Product_Spec"] == spec]
 
-    st.markdown(
-        f"### 🧱 Product Spec: `{spec}` "
-        f"(Groups: {len(df_spec)})"
-    )
+    # ===== LOOP EACH UNIQUE CONDITION =====
+    for (mat, coat, gauge), df_one in df_spec.groupby(
+        ["Material", "Top_Coatmass", "Order_Gauge"]
+    ):
 
-    st.dataframe(
-        df_spec.drop(columns=["Product_Spec"]),
-        use_container_width=True
-    )
+        st.markdown(
+            f"### 🔹 Material: **{mat}** | "
+            f"Coatmass: **{coat}** | "
+            f"Gauge: **{gauge}**"
+        )
+
+        st.dataframe(
+            df_one.drop(
+                columns=["Product_Spec", "Material", "Top_Coatmass", "Order_Gauge"]
+            ),
+            use_container_width=True
+        )
