@@ -1,313 +1,155 @@
-# =============================================================
-# SPC DASHBOARD – FINAL VERSION (SPEC-SAFE, AUDIT-READY)
-# Author: ChatGPT (QC-oriented implementation)
-# =============================================================
-# PRINCIPLES
-# 1) NEVER DROP INVALID SPEC DATA
-# 2) INVALID_SPEC = WARNING ONLY (NO QUANT ANALYSIS)
-# 3) SPC & STATISTICS USE VALID_SPEC ONLY
-# =============================================================
-
 import streamlit as st
 import pandas as pd
 import numpy as np
-import matplotlib.pyplot as plt
-import re
+import requests
+from io import StringIO
 
-# =============================================================
-# PAGE CONFIG
-# =============================================================
-st.set_page_config(
-    page_title="SPC Dashboard – FINAL",
-    layout="wide"
-)
-
-st.title("📊 SPC Dashboard – Spec-safe & Audit-ready")
-
-# =============================================================
-# UTILITIES
-# =============================================================
-
-def parse_spec_range(spec):
-    """
-    Parse spec in form 'a~b'
-    Return (Hmin, Hmax, status)
-    """
-    if pd.isna(spec):
-        return np.nan, np.nan, "INVALID_SPEC"
-
-    spec = str(spec).strip()
-    match = re.match(r"^\s*([0-9]+\.?[0-9]*)\s*~\s*([0-9]+\.?[0-9]*)\s*$", spec)
-    if match:
-        return float(match.group(1)), float(match.group(2)), "VALID_SPEC"
-    else:
-        return np.nan, np.nan, "INVALID_SPEC"
-
-
-def safe_spc_stats(df, value_col):
-    """
-    Calculate SPC statistics safely
-    ONLY for VALID_SPEC
-    """
-    if df.empty:
-        return None
-
-    x = df[value_col].dropna()
-    if len(x) < 2:
-        return None
-
-    mean = x.mean()
-    std = x.std(ddof=1)
-    return {
-        "mean": mean,
-        "std": std,
-        "ucl": mean + 3 * std,
-        "lcl": mean - 3 * std,
-        "p10": np.percentile(x, 10),
-        "p90": np.percentile(x, 90)
-    }
-
-
-# =============================================================
-# LOAD DATA – GOOGLE SHEETS (SINGLE SOURCE OF TRUTH)
-# =============================================================
-
+# ================================
+# CONFIG
+# ================================
 DATA_URL = "https://docs.google.com/spreadsheets/d/1GdnY09hJ2qVHuEBAIJ-eU6B5z8ZdgcGf4P7ZjlAt4JI/export?format=csv"
 
-st.sidebar.header("📂 Data Source")
-st.sidebar.markdown("**Locked source: Google Sheets**")
-st.sidebar.code(DATA_URL)
+st.set_page_config(page_title="Hardness & Mechanical Variability", layout="wide")
+st.title("📊 Hardness & Mechanical Properties Variability Dashboard")
 
-try:
-    df = pd.read_csv(DATA_URL)
-except Exception as e:
-    st.error("Failed to load data from Google Sheets")
-    st.exception(e)
-    st.stop()
+# ================================
+# LOAD DATA
+# ================================
+@st.cache_data
 
-# =============================================================
-# DATA LOADED
-# =============================================================
+def load_data(url):
+    r = requests.get(url)
+    r.encoding = "utf-8"
+    return pd.read_csv(StringIO(r.text))
 
-required_cols = [
-    "Coil_ID",
-    "ORDER NUMBER",  # use ORDER NUMBER instead of Batch
-    "Hardness",
-    "Standard Hardness",
-    "YS",
-    "TS",
-    "EL",
-]
+raw = load_data(DATA_URL)
+st.subheader("🔎 Raw columns")
+st.write(list(raw.columns))
 
-# =============================================================
-# =============================================================
-# SCHEMA NORMALIZATION (EXPLICIT MAP – LOCKED TO YOUR SHEET)
-# =============================================================
-
-# Explicit column mapping based on actual Google Sheets header
-EXPLICIT_MAP = {
+# ================================
+# COLUMN MAPPING (EXPLICIT)
+# ================================
+column_mapping = {
     "COIL_NO": "Coil_ID",
-    "ORDER NUMBER": "ORDER NUMBER",  # keep original name as business key
-    "Standard Hardness": "Standard Hardness",
+    "PRODUCT SPECIFICATION CODE": "Material",
+    "HR STEEL GRADE": "Steel_Grade",
+    "QUALITY_CODE": "Quality",
+    "ORDER GAUGE": "Thickness",
+    "TOP COATMASS": "Coating",
+    "Standard Hardness": "Standard_Hardness",
     "HARDNESS 冶金": "Hardness",
     "TENSILE_YIELD": "YS",
     "TENSILE_TENSILE": "TS",
     "TENSILE_ELONG": "EL",
 }
 
-# apply explicit mapping
-mapped_cols = {}
-for c in df.columns:
-    if c in EXPLICIT_MAP:
-        mapped_cols[c] = EXPLICIT_MAP[c]
+df = raw.rename(columns={k: v for k, v in column_mapping.items() if k in raw.columns})
 
-df = df.rename(columns=mapped_cols)
+# ================================
+# CHECK REQUIRED COLUMNS (NO BATCH!)
+# ================================
+required = ["Coil_ID", "Hardness", "YS", "TS", "EL"]
+missing = [c for c in required if c not in df.columns]
 
-required_cols = [
-    "Coil_ID",
-    "Batch",
-    "Hardness",
-    "Standard Hardness",
-    "YS",
-    "TS",
-    "EL",
-]
-
-missing = [c for c in required_cols if c not in df.columns]
 if missing:
-    st.error("❌ Missing required columns after EXPLICIT mapping")
-    st.write("Missing:", missing)
-    st.write("Detected columns:", list(df.columns))
+    st.error(f"❌ Missing required columns: {missing}")
     st.stop()
 
-# =============================================================
-# SPEC PARSING (CORE LOGIC)
-# =============================================================
-df[["Hmin_spec", "Hmax_spec", "Spec_status"]] = df[
-    "Standard Hardness"
-].apply(lambda x: pd.Series(parse_spec_range(x)))
+# ================================
+# STANDARD HARDNESS PARSE
+# ================================
+def parse_spec(x):
+    try:
+        if isinstance(x, str) and "~" in x:
+            a, b = x.split("~")
+            return float(a), float(b)
+    except:
+        pass
+    return np.nan, np.nan
 
-# =============================================================
-# DATA PARTITION
-# =============================================================
+if "Standard_Hardness" in df.columns:
+    df[["Hmin_spec", "Hmax_spec"]] = df["Standard_Hardness"].apply(
+        lambda x: pd.Series(parse_spec(x))
+    )
+    df["Spec_status"] = np.where(df[["Hmin_spec", "Hmax_spec"]].isna().any(axis=1), "INVALID_SPEC", "VALID_SPEC")
+else:
+    df["Spec_status"] = "INVALID_SPEC"
+
+# ================================
+# FILTER VALID DATA ONLY
+# ================================
 df_valid = df[df["Spec_status"] == "VALID_SPEC"].copy()
-df_invalid = df[df["Spec_status"] == "INVALID_SPEC"].copy()
 
-# =============================================================
-# TABS
-# =============================================================
-tab1, tab2, tab3, tab4, tab5 = st.tabs([
-    "🏠 Overview",
-    "🟢 Hardness SPC",
-    "🟢 Mechanical SPC",
-    "🔴 Spec Warning",
-    "📋 Raw Data"
-])
-
-# =============================================================
-# TAB 1 – OVERVIEW
-# =============================================================
-with tab1:
-    st.subheader("Overview")
-
-    col1, col2, col3 = st.columns(3)
-    col1.metric("Total Records", len(df))
-    col2.metric("VALID_SPEC", len(df_valid))
-    col3.metric("INVALID_SPEC", len(df_invalid))
-
-    st.markdown("""
-    **Rules applied:**
-    - INVALID_SPEC is **kept for warning only**
-    - SPC / statistics use **VALID_SPEC only**
-    - No silent data cleaning
-    """)
-
-# =============================================================
-# TAB 2 – HARDNESS SPC
-# =============================================================
-with tab2:
-    st.subheader("Hardness SPC (VALID_SPEC only)")
-
-    stats = safe_spc_stats(df_valid, "Hardness")
-
-    if stats is None:
-        st.warning("Not enough VALID_SPEC data for SPC analysis")
-    else:
-        fig, ax = plt.subplots(figsize=(10, 4))
-        ax.plot(df_valid.index + 1, df_valid["Hardness"], marker="o")
-        ax.axhline(stats["mean"], linestyle="--", label="Mean")
-        ax.axhline(stats["ucl"], linestyle=":", label="UCL")
-        ax.axhline(stats["lcl"], linestyle=":", label="LCL")
-        ax.set_xlabel("Sample")
-        ax.set_ylabel("Hardness")
-        ax.legend()
-        st.pyplot(fig)
-
-        st.json(stats)
-
-# =============================================================
-# TAB 3 – MECHANICAL SPC (YS / TS / EL)
-# =============================================================
-with tab3:
-    st.subheader("Mechanical Properties SPC (VALID_SPEC only)")
-
-    for col in ["YS", "TS", "EL"]:
-        st.markdown(f"### {col}")
-        stats = safe_spc_stats(df_valid, col)
-
-        if stats is None:
-            st.warning(f"Not enough data for {col}")
-            continue
-
-        fig, ax = plt.subplots(figsize=(10, 3))
-        ax.plot(df_valid.index + 1, df_valid[col], marker="o")
-        ax.axhline(stats["mean"], linestyle="--")
-        ax.axhline(stats["ucl"], linestyle=":")
-        ax.axhline(stats["lcl"], linestyle=":")
-        ax.set_ylabel(col)
-        st.pyplot(fig)
-
-# =============================================================
-# TAB 4 – SPEC WARNING
-# =============================================================
-with tab4:
-    st.subheader("⚠️ INVALID SPEC – WARNING ONLY")
-
-    st.markdown("""
-    - These records are **NOT used** for SPC or statistics
-    - Purpose:
-        - QC warning
-        - Spec input error detection
-        - Master data governance
-    """)
-
-    st.dataframe(
-        df_invalid[[
-            "Coil_ID",
-            "Batch",
-            "Standard Hardness",
-            "Hardness"
-        ]]
+# ================================
+# VARIABILITY FUNCTION
+# ================================
+def variability_table(group_cols, value_col):
+    return (
+        df_valid.groupby(group_cols)[value_col]
+        .agg(
+            count="count",
+            mean="mean",
+            std="std",
+            p10=lambda x: np.percentile(x, 10),
+            p90=lambda x: np.percentile(x, 90),
+        )
+        .reset_index()
     )
 
-# =============================================================
-# TAB 5 – VARIABILITY TABLES (BY LEVELS)
-# =============================================================
-with tab5:
-    st.subheader("📐 Variability Tables by Level (VALID_SPEC only)")
+# ================================
+# TABS
+# ================================
+tabs = st.tabs([
+    "🧵 By COIL",
+    "🧱 By Material",
+    "🎨 By Coating",
+    "📏 By Thickness",
+    "⚠️ Spec Warning",
+])
 
-    st.markdown("""
-    Các bảng dưới đây **chỉ dùng VALID_SPEC** để đánh giá **độ biến động (variability)**.
-    Mỗi bảng tương ứng **một cấp độ phân tích** khác nhau.
-    """)
-
-    df_v = df_valid.copy()
-
-    def variability_table(group_cols, value_col):
-        return (
-            df_v
-            .groupby(group_cols)[value_col]
-            .agg([
-                ("count", "count"),
-                ("mean", "mean"),
-                ("std", "std"),
-                ("min", "min"),
-                ("max", "max")
-            ])
-            .reset_index()
-        )
-
-    # -------- LEVEL 0: COIL LEVEL --------
-    st.markdown("### 🧵 By COIL_NO (coil-level variability)")
-    for col in ["Hardness", "TS", "YS", "EL"]:
-        st.markdown(f"**{col}**")
+# -------- TAB 1: COIL --------
+with tabs[0]:
+    st.subheader("Variability by COIL_NO")
+    for col in ["Hardness", "YS", "TS", "EL"]:
+        st.markdown(f"### {col}")
         st.dataframe(variability_table(["Coil_ID"], col))
 
-    # -------- LEVEL 1: MATERIAL --------
-    st.markdown("### 🧱 By Material")
-    for col in ["Hardness", "TS", "YS", "EL"]:
-        st.markdown(f"**{col}**")
-        st.dataframe(variability_table(["Material"], col))
+# -------- TAB 2: MATERIAL --------
+with tabs[1]:
+    st.subheader("Variability by Material")
+    if "Material" in df_valid.columns:
+        for col in ["Hardness", "YS", "TS", "EL"]:
+            st.markdown(f"### {col}")
+            st.dataframe(variability_table(["Material"], col))
+    else:
+        st.info("Material column not available")
 
-    # -------- LEVEL 2: MATERIAL + COATING --------
-    st.markdown("### 🎨 By Material + Coating")
-    for col in ["Hardness", "TS", "YS", "EL"]:
-        st.markdown(f"**{col}**")
-        st.dataframe(variability_table(["Material", "Coating"], col))
+# -------- TAB 3: COATING --------
+with tabs[2]:
+    st.subheader("Variability by Coating")
+    if "Coating" in df_valid.columns:
+        for col in ["Hardness", "YS", "TS", "EL"]:
+            st.markdown(f"### {col}")
+            st.dataframe(variability_table(["Coating"], col))
+    else:
+        st.info("Coating column not available")
 
-    # -------- LEVEL 3: MATERIAL + COATING + THICKNESS --------
-    st.markdown("### 📏 By Material + Coating + Thickness")
-    for col in ["Hardness", "TS", "YS", "EL"]:
-        st.markdown(f"**{col}**")
-        st.dataframe(variability_table(["Material", "Coating", "Thickness"], col))
+# -------- TAB 4: THICKNESS --------
+with tabs[3]:
+    st.subheader("Variability by Thickness")
+    if "Thickness" in df_valid.columns:
+        for col in ["Hardness", "YS", "TS", "EL"]:
+            st.markdown(f"### {col}")
+            st.dataframe(variability_table(["Thickness"], col))
+    else:
+        st.info("Thickness column not available")
 
-# =============================================================
-# END OF FILE
-# =============================================================
-with tab5:
-    st.subheader("Raw Data (Full, Unfiltered)")
-    st.dataframe(df)
+# -------- TAB 5: INVALID SPEC --------
+with tabs[4]:
+    st.subheader("⚠️ INVALID STANDARD HARDNESS")
+    st.write("These records are excluded from quantitative analysis")
+    st.dataframe(df[df["Spec_status"] == "INVALID_SPEC"][
+        [c for c in ["Coil_ID", "Standard_Hardness", "Hardness"] if c in df.columns]
+    ])
 
-# =============================================================
-# END OF FILE
-# =============================================================
+st.success("✅ Dashboard loaded successfully (COIL-based, no Batch logic)")
