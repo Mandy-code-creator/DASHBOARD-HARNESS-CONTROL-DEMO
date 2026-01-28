@@ -224,4 +224,4 @@ if task == "QA Strict Spec Check (1 NG = FAIL)":
     
     🧪 **QA Result:** `{qa_result}`
     """
-    st.markdown(header_md)
+        st.markdown(header_md)
