@@ -100,47 +100,43 @@ required_cols = [
 ]
 
 # =============================================================
-# SCHEMA NORMALIZATION (AUTO MAP COLUMNS)
+# SCHEMA NORMALIZATION (ROBUST AUTO MAP – CONTAINS LOGIC)
 # =============================================================
 
-COLUMN_ALIAS = {
-    "coil_id": "Coil_ID",
-    "coil": "Coil_ID",
-    "batch": "Batch",
-    "batch_no": "Batch",
-    "hardness": "Hardness",
-    "h": "Hardness",
-    "ys": "YS",
-    "yield_strength": "YS",
-    "ts": "TS",
-    "tensile_strength": "TS",
-    "el": "EL",
-    "elongation": "EL",
+import unicodedata
+
+def normalize_text(s):
+    return unicodedata.normalize("NFKD", s).encode("ascii", "ignore").decode("ascii").lower().strip()
+
+TARGET_COLUMNS = {
+    "coil_id": ["coil"],
+    "batch": ["order", "batch", "lot"],
+    "hardness": ["hardness"],
+    "ys": ["tensile_yield", "yield"],
+    "ts": ["tensile_tensile", "tensile"],
+    "el": ["tensile_elong", "elong"]
 }
 
-# normalize column names
-normalized_cols = {}
-for c in df.columns:
-    key = c.strip().lower()
-    normalized_cols[c] = COLUMN_ALIAS.get(key, c)
+column_map = {}
 
-df = df.rename(columns=normalized_cols)
+for col in df.columns:
+    ncol = normalize_text(col)
+    for target, keywords in TARGET_COLUMNS.items():
+        if any(k in ncol for k in keywords):
+            column_map[col] = target.upper() if target != "coil_id" else "Coil_ID"
+            break
 
-required_cols = [
-    "Coil_ID",
-    "Batch",
-    "Hardness",
-    "Standard Hardness",
-    "YS",
-    "TS",
-    "EL"
-]
+# apply mapping
+df = df.rename(columns=column_map)
 
+required_cols = ["Coil_ID", "Batch", "Hardness", "YS", "TS", "EL", "Standard Hardness"]
 missing = [c for c in required_cols if c not in df.columns]
+
 if missing:
-    st.error("❌ Missing required columns after auto-mapping")
+    st.error("❌ Missing required columns after robust auto-mapping")
     st.write("Missing:", missing)
-    st.write("Available columns:", list(df.columns))
+    st.write("Detected columns:", list(df.columns))
+    st.info("👉 Please ensure column names contain keywords: coil / batch / hard / yield / tensile / elong")
     st.stop()
 
 # =============================================================
