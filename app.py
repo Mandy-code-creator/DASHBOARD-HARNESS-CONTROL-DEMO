@@ -174,35 +174,50 @@ if task == "Summary (raw tables)":
 # ================================QA Strict Spec Check (1 NG = FAIL)
 if task == "QA Strict Spec Check (1 NG = FAIL)":
 
-    st.subheader("🧪 QA Strict Spec Result")
-    st.caption("Rule: If ANY coil is out of spec → FAIL")
+    st.subheader("🧪 QA Strict Spec Check – Coil level")
+    st.caption("Rule: If ANY coil is out of spec → Product FAIL")
 
-    def count_ng(series, std_min, std_max):
-        return ((series < std_min) | (series > std_max)).sum()
+    def is_ng(val, std_min, std_max):
+        if pd.isna(val):
+            return False
+        return (val < std_min) or (val > std_max)
 
-    qa_summary = (
-        df
-        .groupby(GROUP_COLS)
-        .apply(lambda g: pd.Series({
-            "n_coils": g["COIL_NO"].nunique(),
-            "NG_LAB": count_ng(
-                g["Hardness_LAB"],
-                g["Std_Min"].iloc[0],
-                g["Std_Max"].iloc[0]
-            ),
-            "NG_LINE": count_ng(
-                g["Hardness_LINE"],
-                g["Std_Min"].iloc[0],
-                g["Std_Max"].iloc[0]
-            ),
-        }))
-        .reset_index()
-    )
+    # lặp theo từng Product_Spec
+    for spec, df_spec in df.groupby("Product_Spec"):
 
-    qa_summary["QA_Result"] = np.where(
-        (qa_summary["NG_LAB"] > 0) | (qa_summary["NG_LINE"] > 0),
-        "FAIL",
-        "PASS"
-    )
+        std_min = df_spec["Std_Min"].iloc[0]
+        std_max = df_spec["Std_Max"].iloc[0]
 
-    st.dataframe(qa_summary, use_container_width=True)
+        # xác định NG
+        df_spec = df_spec.copy()
+        df_spec["NG_LAB"] = df_spec["Hardness_LAB"].apply(
+            lambda x: is_ng(x, std_min, std_max)
+        )
+        df_spec["NG_LINE"] = df_spec["Hardness_LINE"].apply(
+            lambda x: is_ng(x, std_min, std_max)
+        )
+
+        n_coils = df_spec["COIL_NO"].nunique()
+        n_ng = (df_spec["NG_LAB"] | df_spec["NG_LINE"]).sum()
+
+        qa_result = "FAIL" if n_ng > 0 else "PASS"
+
+        # ===== HEADER =====
+        st.markdown(
+            f"## 🧱 Product Spec: `{spec}`  \n"
+            f"➡️ **n = {n_coils} coils**  \n"
+            f"🧪 **QA Result: `{qa_result}`**"
+        )
+
+        # ===== DISPLAY TABLE =====
+        show_cols = [
+            "COIL_NO",
+            "Std_Min", "Std_Max",
+            "Hardness_LAB", "Hardness_LINE",
+            "YS", "TS", "EL"
+        ]
+
+        st.dataframe(
+            df_spec[show_cols].sort_values("COIL_NO"),
+            use_container_width=True
+        )
