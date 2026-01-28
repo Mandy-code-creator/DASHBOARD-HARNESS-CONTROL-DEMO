@@ -115,8 +115,10 @@ condition_order = (
     df.groupby(GROUP_COLS)
       .size()
       .reset_index(name="N_Coils")
+      .query("N_Coils >= 30")
       .sort_values("N_Coils", ascending=False)
 )
+
 
 # ================================
 # DISPLAY
