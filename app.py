@@ -28,7 +28,7 @@ raw = load_data(DATA_URL)
 # ================================
 column_mapping = {
     "PRODUCT SPECIFICATION CODE": "Product_Spec",
-    "Material": "Material",
+    "HR STEEL GRADE": "Material",
     "TOP COATMASS": "Top_Coatmass",
     "ORDER GAUGE": "Order_Gauge",
     "HARDNESS 冶金": "Hardness",
