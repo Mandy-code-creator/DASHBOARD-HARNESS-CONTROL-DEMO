@@ -230,14 +230,41 @@ for _, cond in valid_conditions.iterrows():
             st.pyplot(fig)
 
     # ================================
+    # =========================
+
     # VIEW 3 — DISTRIBUTION
     # ================================
+# PREPARE DATA FOR DISTRIBUTION
+# =========================
+sub_dist = sub.sort_values("COIL_NO").reset_index(drop=True).copy()
+
+lab_df  = sub_dist[sub_dist["Hardness_LAB"]  > 0]
+line_df = sub_dist[sub_dist["Hardness_LINE"] > 0]
+
     if view_mode == "📊 Distribution":
-        fig, ax = plt.subplots(figsize=(6,3))
-        ax.hist(lab_df["Hardness_LAB"], bins=10, alpha=0.6, label="LAB")
-        ax.hist(line_df["Hardness_LINE"], bins=10, alpha=0.6, label="LINE")
-        ax.axvline(lo, linestyle="--", label="LSL")
-        ax.axvline(hi, linestyle="--", label="USL")
-        ax.legend()
-        ax.set_title("Hardness Distribution")
-        st.pyplot(fig)
+       fig, ax = plt.subplots(figsize=(5, 4))
+
+ax.hist(
+    lab_df["Hardness_LAB"],
+    bins=10,
+    alpha=0.6,
+    label="LAB"
+)
+
+ax.hist(
+    line_df["Hardness_LINE"],
+    bins=10,
+    alpha=0.6,
+    label="LINE"
+)
+
+ax.axvline(lo, linestyle="--", linewidth=1, label="LSL")
+ax.axvline(hi, linestyle="--", linewidth=1, label="USL")
+
+ax.set_title(f"{spec} | Hardness Distribution")
+ax.set_xlabel("HRB")
+ax.set_ylabel("Count")
+ax.legend()
+
+st.pyplot(fig)
+
