@@ -23,33 +23,20 @@ def load_data(url):
 
 raw = load_data(DATA_URL)
 # ================================
-# NORMALIZE COLUMN NAMES (MUST BE BEFORE RENAME)
+# FORCE FIND & CREATE METALLIC TYPE COLUMN
 # ================================
-raw.columns = (
-    raw.columns
-        .astype(str)
-        .str.replace("\u00A0", " ", regex=False)  # NBSP
-        .str.replace("\t", " ", regex=False)
-        .str.replace("\n", " ", regex=False)
-        .str.strip()
-)
+metal_col = None
+for c in raw.columns:
+    if "METALLIC" in c.upper() and "COATING" in c.upper():
+        metal_col = c
+        break
 
-# ================================
-# FORCE CLEAN COLUMN NAMES (HARD FIX)
-# ================================
-raw.columns = (
-    raw.columns
-        .astype(str)
-        .str.replace("\u00A0", " ", regex=False)  # NBSP
-        .str.replace("\t", " ", regex=False)
-        .str.replace("\n", " ", regex=False)
-        .str.strip()
-)
-st.write("COLUMNS AFTER CLEAN:", raw.columns.tolist())
+if metal_col is None:
+    st.error("❌ Cannot find METALLIC COATING TYPE column in raw data")
+    st.stop()
 
-# ================================
-# COLUMN MAPPING
-# ================================
+raw["Metallic_Type"] = raw[metal_col]
+
 column_mapping = {
     "PRODUCT SPECIFICATION CODE": "Product_Spec",
     "HR STEEL GRADE": "Material",
@@ -63,12 +50,10 @@ column_mapping = {
     "TENSILE_YIELD": "YS",
     "TENSILE_TENSILE": "TS",
     "TENSILE_ELONG": "EL",
-    "METALLIC COATING TYPE": "Metallic_Type",
-
 }
 
 df = raw.rename(columns={k: v for k, v in column_mapping.items() if k in raw.columns})
-st.write("Metallic col exists?", "Metallic_Type" in df.columns)
+st.write("Metallic_Type exists?", "Metallic_Type" in df.columns)
 
 # ================================
 # REQUIRED COLUMNS CHECK
