@@ -24,9 +24,9 @@ st.title("📊 Material-level Hardness & Mechanical Detail (Offline only)")
 # ================================
 @st.cache_data
 def load_data(url):
-r = requests.get(url)
-r.encoding = "utf-8"
-return pd.read_csv(StringIO(r.text))
+    r = requests.get(url)
+    r.encoding = "utf-8"
+    return pd.read_csv(StringIO(r.text))
 
 raw = load_data(DATA_URL)
 # ================================
