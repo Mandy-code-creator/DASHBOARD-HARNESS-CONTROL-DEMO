@@ -258,7 +258,15 @@ if task == "QA Strict + Chart":
         )
 
       # ===== PREPARE X AXIS =====
+sub = df[
+    (df["Product_Spec"] == spec) &
+    (df["Material"] == mat) &
+    (df["Top_Coatmass"] == coat) &
+    (df["Order_Gauge"] == gauge)
+].copy()
+
 sub = sub.sort_values("COIL_NO").reset_index(drop=True)
+
 sub["X"] = sub.index + 1
 
 # ===== REMOVE ZERO HARDNESS (KHÔNG VẼ) =====
