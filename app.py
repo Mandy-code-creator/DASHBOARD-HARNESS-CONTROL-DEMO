@@ -288,7 +288,7 @@ ax.scatter(
     ng["Hardness_LINE"],
     s=70,
     label="NG",
-    color="organce",
+    color="tab:orange",
     zorder=3
 )
 
