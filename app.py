@@ -221,49 +221,47 @@ if view_mode == "📋 Data Table":
     )
 
     # ================================
-    # VIEW 2 — TREND (LAB / LINE)
-    # ================================
-    if view_mode == "📈 Trend (LAB / LINE)":
+    elif view_mode == "📈 Trend (LAB / LINE)":
 
-        sub["X"] = sub.index + 1
-        lab_df  = sub[sub["Hardness_LAB"]  > 0]
-        line_df = sub[sub["Hardness_LINE"] > 0]
+    sub = sub.sort_values("COIL_NO").reset_index(drop=True)
+    sub["X"] = sub.index + 1
 
-        y_min = np.floor(min(lo, lab_df["Hardness_LAB"].min(), line_df["Hardness_LINE"].min()))
-        y_max = np.ceil (max(hi, lab_df["Hardness_LAB"].max(), line_df["Hardness_LINE"].max()))
+    lab_df  = sub[sub["Hardness_LAB"]  > 0]
+    line_df = sub[sub["Hardness_LINE"] > 0]
 
-        c1, c2 = st.columns(2)
+    y_min = np.floor(min(lo, lab_df["Hardness_LAB"].min(), line_df["Hardness_LINE"].min()))
+    y_max = np.ceil (max(hi, lab_df["Hardness_LAB"].max(), line_df["Hardness_LINE"].max()))
 
-        with c1:
-            fig, ax = plt.subplots(figsize=(6,3))
-            ax.plot(lab_df["X"], lab_df["Hardness_LAB"], marker="o", label="LAB")
-            ax.axhline(lo, linestyle="--", label="LSL")
-            ax.axhline(hi, linestyle="--", label="USL")
-            ax.set_title("Hardness LAB")
-            ax.set_ylim(y_min, y_max)
-            ax.set_yticks(np.arange(y_min, y_max+0.01, 2.5))
-            ax.grid(alpha=0.3)
-            ax.legend(bbox_to_anchor=(1.02,0.5), loc="center left", frameon=False)
-            st.pyplot(fig)
+    c1, c2 = st.columns(2)
 
-        with c2:
-            fig, ax = plt.subplots(figsize=(6,3))
-            ax.plot(line_df["X"], line_df["Hardness_LINE"], marker="o", label="LINE")
-            ax.axhline(lo, linestyle="--", label="LSL")
-            ax.axhline(hi, linestyle="--", label="USL")
-            ax.set_title("Hardness LINE")
-            ax.set_ylim(y_min, y_max)
-            ax.set_yticks(np.arange(y_min, y_max+0.01, 2.5))
-            ax.grid(alpha=0.3)
-            ax.legend(bbox_to_anchor=(1.02,0.5), loc="center left", frameon=False)
-            st.pyplot(fig)
+    with c1:
+        fig, ax = plt.subplots(figsize=(5,3))
+        ax.plot(lab_df["X"], lab_df["Hardness_LAB"], marker="o", label="LAB")
+        ax.axhline(lo, linestyle="--", label="LSL")
+        ax.axhline(hi, linestyle="--", label="USL")
+        ax.set_ylim(y_min, y_max)
+        ax.set_yticks(np.arange(y_min, y_max+0.01, 2.5))
+        ax.set_title("Hardness LAB")
+        ax.grid(alpha=0.3)
+        ax.legend(frameon=False)
+        st.pyplot(fig)
 
-    # ================================
+    with c2:
+        fig, ax = plt.subplots(figsize=(5,3))
+        ax.plot(line_df["X"], line_df["Hardness_LINE"], marker="o", label="LINE")
+        ax.axhline(lo, linestyle="--", label="LSL")
+        ax.axhline(hi, linestyle="--", label="USL")
+        ax.set_ylim(y_min, y_max)
+        ax.set_yticks(np.arange(y_min, y_max+0.01, 2.5))
+        ax.set_title("Hardness LINE")
+        ax.grid(alpha=0.3)
+        ax.legend(frameon=False)
+        st.pyplot(fig)
 
 # ================================
 # VIEW 3 — DISTRIBUTION
 # ================================
-if view_mode == "📊 Distribution":
+elif view_mode == "📊 Distribution":
 
     sub_dist = sub.sort_values("COIL_NO").reset_index(drop=True).copy()
 
