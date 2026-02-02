@@ -59,7 +59,6 @@ column_mapping = {
 }
 
 df = raw.rename(columns={k: v for k, v in column_mapping.items() if k in raw.columns})
-st.write("Metallic_Type exists?", "Metallic_Type" in df.columns)
 
 # ================================
 # REQUIRED COLUMNS CHECK
