@@ -257,40 +257,62 @@ if task == "QA Strict + Chart":
         )
 
         # ===== CHART =====
-# ===== CHART =====
-fig, ax = plt.subplots(figsize=(6, 3))
+# ===== BIỂU ĐỒ (CÂN ĐỐI + DỄ ĐỌC) =====
+plot_df = sub.copy()
 
-plot_df = sub[sub["Hardness_LINE"] > 0]
+# ❌ bỏ hardness = 0 (không vẽ)
+plot_df = plot_df[
+    (plot_df["Hardness_LINE"] > 0)
+].sort_values("COIL_NO")
+
+# tạo trục X = thứ tự sau khi sort
+plot_df["X"] = range(1, len(plot_df) + 1)
 
 ok = plot_df[~plot_df["COIL_NG"]]
 ng = plot_df[plot_df["COIL_NG"]]
 
-x_ok = ok.index + 1
-x_ng = ng.index + 1
+fig, ax = plt.subplots(figsize=(9, 4))  # rộng hơn → đỡ dẹt
 
-ax.plot(x_ok, ok["Hardness_LINE"], marker="o", label="OK")
-ax.plot(x_ng, ng["Hardness_LINE"], marker="o", linestyle="", label="NG")
-
-ax.axhline(lo, linestyle="--", label="LSL")
-ax.axhline(hi, linestyle="--", label="USL")
-
-# ✅ Y-AXIS: STEP = 1 (55, 56, 57, ...)
-ax.set_yticks(
-    np.arange(
-        int(np.floor(lo)) - 1,
-        int(np.ceil(hi)) + 2,
-        1
-    )
+# ===== OK: line + marker =====
+ax.plot(
+    ok["X"],
+    ok["Hardness_LINE"],
+    marker="o",
+    linewidth=2,
+    label="OK"
 )
 
+# ===== NG: scatter rời =====
+ax.scatter(
+    ng["X"],
+    ng["Hardness_LINE"],
+    s=70,
+    label="NG",
+    zorder=3
+)
+
+# ===== LSL / USL =====
+ax.axhline(lo, linestyle="--", linewidth=1.5, label="LSL")
+ax.axhline(hi, linestyle="--", linewidth=1.5, label="USL")
+
+# ===== TRỤC Y: HRB nhảy từng 1 =====
+y_min = int(min(lo, plot_df["Hardness_LINE"].min())) - 1
+y_max = int(max(hi, plot_df["Hardness_LINE"].max())) + 1
+ax.set_yticks(range(y_min, y_max + 1, 1))
+ax.set_ylim(y_min, y_max)
+
+# ===== LABEL =====
 ax.set_xlabel("Coil Order (sorted by COIL_NO)")
 ax.set_ylabel("Hardness LINE (HRB)")
-ax.set_title(f"{spec} | {qa_result}")
+ax.set_title(f"{spec} | QA Result: {qa_result}")
 
+# ===== LEGEND ĐỂ NGOÀI =====
 ax.legend(
-    loc="upper left",
-    bbox_to_anchor=(1.02, 1),
-    borderaxespad=0
+    loc="center left",
+    bbox_to_anchor=(1.02, 0.5),
+    frameon=True
 )
+
+ax.grid(alpha=0.3)
 
 st.pyplot(fig)
