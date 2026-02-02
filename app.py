@@ -16,6 +16,7 @@ from io import StringIO
 import matplotlib.pyplot as plt
 from io import BytesIO
 # ================================
+# ================================
 # UTILITY FUNCTION
 # ================================
 def fig_to_png(fig, dpi=200):
@@ -179,6 +180,23 @@ for _, cond in valid_conditions.iterrows():
     ].copy().sort_values("COIL_NO").reset_index(drop=True)
 
     lo, hi = sub[["Std_Min","Std_Max"]].iloc[0]
+# ===== PASS / FAIL cơ tính =====
+sub["YS_PASS"] = (
+    (sub["YS"] >= sub["Standard_YS_Min"]) &
+    (sub["YS"] <= sub["Standard_YS_Max"])
+)
+
+sub["TS_PASS"] = (
+    (sub["TS"] >= sub["Standard_TS_Min"]) &
+    (sub["TS"] <= sub["Standard_TS_Max"])
+)
+
+sub["EL_PASS"] = (
+    (sub["EL"] >= sub["Standard_EL_Min"]) &
+    (sub["EL"] <= sub["Standard_EL_Max"])
+)
+
+sub["MECH_PASS"] = sub["YS_PASS"] & sub["TS_PASS"] & sub["EL_PASS"]
 
     # ===== QA STRICT LOGIC (KHÔNG ĐỔI) =====
     sub["NG_LAB"]  = (sub["Hardness_LAB"]  < lo) | (sub["Hardness_LAB"]  > hi)
@@ -376,4 +394,81 @@ for _, cond in valid_conditions.iterrows():
             key=f"dl_dist_{spec}_{mat}_{gauge}_{coat}"
         )
 
+elif view_mode == "📐 Hardness Safety Analysis":
+        def plot_igf(ax, data, label):
+            mu = data.mean()
+            sigma = data.std(ddof=1)
+        
+            x = np.linspace(data.min(), data.max(), 200)
+            y = (
+                1 / (sigma * np.sqrt(2 * np.pi)) *
+                np.exp(-0.5 * ((x - mu) / sigma) ** 2)
+            )
+        
+            ax.plot(x, y, linestyle="--", linewidth=2, label=f"{label} IGF")
+st.markdown("## 📊 Hardness Distribution + IGF (Bin = 1 HRB)")
+
+c1, c2 = st.columns(2)
+with c1:
+    fig, ax = plt.subplots(figsize=(5,4))
+
+    ax.hist(
+        lab_df["Hardness_LAB"],
+        bins=np.arange(
+            lab_df["Hardness_LAB"].min(),
+            lab_df["Hardness_LAB"].max() + 1,
+            1
+        ),
+        density=True,
+        alpha=0.6
+    )
+
+    plot_igf(ax, lab_df["Hardness_LAB"], "LAB")
+
+    ax.set_title("LAB Hardness Distribution")
+    ax.set_xlabel("Hardness (HRB)")
+    ax.set_ylabel("Density")
+    ax.grid(alpha=0.3)
+    ax.legend()
+
+    st.pyplot(fig)
+
+    st.download_button(
+        "⬇️ Download LAB Distribution",
+        data=fig_to_png(fig),
+        file_name="LAB_hardness_distribution.png",
+        mime="image/png",
+        key="dl_lab_igf"
+    )
+with c2:
+    fig, ax = plt.subplots(figsize=(5,4))
+
+    ax.hist(
+        line_df["Hardness_LINE"],
+        bins=np.arange(
+            line_df["Hardness_LINE"].min(),
+            line_df["Hardness_LINE"].max() + 1,
+            1
+        ),
+        density=True,
+        alpha=0.6
+    )
+
+    plot_igf(ax, line_df["Hardness_LINE"], "LINE")
+
+    ax.set_title("LINE Hardness Distribution")
+    ax.set_xlabel("Hardness (HRB)")
+    ax.set_ylabel("Density")
+    ax.grid(alpha=0.3)
+    ax.legend()
+
+    st.pyplot(fig)
+
+    st.download_button(
+        "⬇️ Download LINE Distribution",
+        data=fig_to_png(fig),
+        file_name="LINE_hardness_distribution.png",
+        mime="image/png",
+        key="dl_line_igf"
+    )
 
