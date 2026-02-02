@@ -22,7 +22,18 @@ def load_data(url):
     return pd.read_csv(StringIO(r.text))
 
 raw = load_data(DATA_URL)
-st.write("RAW COLUMNS:", list(raw.columns))
+# ================================
+# NORMALIZE COLUMN NAMES (MUST BE BEFORE RENAME)
+# ================================
+raw.columns = (
+    raw.columns
+        .astype(str)
+        .str.replace("\u00A0", " ", regex=False)  # NBSP
+        .str.replace("\t", " ", regex=False)
+        .str.replace("\n", " ", regex=False)
+        .str.strip()
+)
+
 # ================================
 # FORCE CLEAN COLUMN NAMES (HARD FIX)
 # ================================
@@ -57,6 +68,7 @@ column_mapping = {
 }
 
 df = raw.rename(columns={k: v for k, v in column_mapping.items() if k in raw.columns})
+st.write("Metallic col exists?", "Metallic_Type" in df.columns)
 
 # ================================
 # REQUIRED COLUMNS CHECK
