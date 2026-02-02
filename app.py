@@ -231,41 +231,84 @@ for _, cond in valid_conditions.iterrows():
 
     # ================================
 
+# ================================
 # VIEW 3 — DISTRIBUTION
 # ================================
-
 if view_mode == "📊 Distribution":
 
-    # PREPARE DATA FOR DISTRIBUTION
     sub_dist = sub.sort_values("COIL_NO").reset_index(drop=True).copy()
 
     lab_df  = sub_dist[sub_dist["Hardness_LAB"]  > 0]
     line_df = sub_dist[sub_dist["Hardness_LINE"] > 0]
 
-    fig, ax = plt.subplots(figsize=(5, 4))
+    fig, ax = plt.subplots(figsize=(6, 4))
 
-    ax.hist(
+    # ===== HISTOGRAM =====
+    bins = 10
+
+    lab_counts, lab_bins, _ = ax.hist(
         lab_df["Hardness_LAB"],
-        bins=10,
-        alpha=0.6,
-        label="LAB"
+        bins=bins,
+        alpha=0.5,
+        label="LAB",
+        edgecolor="black"
     )
 
-    ax.hist(
+    line_counts, line_bins, _ = ax.hist(
         line_df["Hardness_LINE"],
-        bins=10,
-        alpha=0.6,
-        label="LINE"
+        bins=bins,
+        alpha=0.5,
+        label="LINE",
+        edgecolor="black"
     )
 
+    # ===== NORMAL CURVE (LAB) =====
+    mu_lab  = lab_df["Hardness_LAB"].mean()
+    std_lab = lab_df["Hardness_LAB"].std()
+
+    x_lab = np.linspace(lab_bins.min(), lab_bins.max(), 200)
+    pdf_lab = (
+        1 / (std_lab * np.sqrt(2 * np.pi))
+        * np.exp(-0.5 * ((x_lab - mu_lab) / std_lab) ** 2)
+    )
+
+    ax.plot(
+        x_lab,
+        pdf_lab * len(lab_df) * (lab_bins[1] - lab_bins[0]),
+        linestyle="--",
+        linewidth=2,
+        label="LAB Normal"
+    )
+
+    # ===== NORMAL CURVE (LINE) =====
+    mu_line  = line_df["Hardness_LINE"].mean()
+    std_line = line_df["Hardness_LINE"].std()
+
+    x_line = np.linspace(line_bins.min(), line_bins.max(), 200)
+    pdf_line = (
+        1 / (std_line * np.sqrt(2 * np.pi))
+        * np.exp(-0.5 * ((x_line - mu_line) / std_line) ** 2)
+    )
+
+    ax.plot(
+        x_line,
+        pdf_line * len(line_df) * (line_bins[1] - line_bins[0]),
+        linestyle="--",
+        linewidth=2,
+        label="LINE Normal"
+    )
+
+    # ===== SPEC LIMIT =====
     ax.axvline(lo, linestyle="--", linewidth=1, label="LSL")
     ax.axvline(hi, linestyle="--", linewidth=1, label="USL")
 
-    ax.set_title(f"{spec} | Hardness Distribution")
+    ax.set_title(f"{spec} | Hardness Distribution + Normal Curve")
     ax.set_xlabel("HRB")
     ax.set_ylabel("Count")
     ax.legend()
+    ax.grid(alpha=0.3)
 
     st.pyplot(fig)
+
 
 
