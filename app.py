@@ -45,6 +45,7 @@ raw["Metallic_Type"] = raw[metal_col]
 column_mapping = {
     "PRODUCT SPECIFICATION CODE": "Product_Spec",
     "HR STEEL GRADE": "Material",
+    "Claasify material": "Rolling_Type",
     "TOP COATMASS": "Top_Coatmass",
     "ORDER GAUGE": "Order_Gauge",
     "COIL NO": "COIL_NO",
@@ -65,7 +66,7 @@ st.write("Metallic_Type exists?", "Metallic_Type" in df.columns)
 # ================================
 required_cols = [
     "Product_Spec", "Material", "Top_Coatmass", "Order_Gauge",
-    "COIL_NO", "Quality_Code",
+    "COIL_NO", "Quality_Code", "Rolling_Type", 
     "Std_Range_Text", "Hardness_LAB", "Hardness_LINE",
     "YS", "TS", "EL", "Metallic_Type",
 
@@ -109,6 +110,20 @@ task = st.sidebar.radio(
     ],
     index=0
 )
+# ================================
+# ROLLING TYPE FILTER (FROM SHEET)
+# ================================
+st.sidebar.header("🎛 ROLLING TYPE")
+
+rolling_types = sorted(df["Rolling_Type"].dropna().unique())
+
+selected_rolling = st.sidebar.radio(
+    "Select Rolling Type",
+    rolling_types
+)
+
+df = df[df["Rolling_Type"] == selected_rolling]
+
 # ================================
 # METALLIC COATING TYPE FILTER
 # ================================
