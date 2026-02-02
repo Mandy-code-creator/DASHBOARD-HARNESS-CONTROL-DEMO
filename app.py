@@ -172,44 +172,7 @@ if valid_conditions.empty:
     st.stop()
 
 # =========================================================
-# SUMMARY
-# =========================================================
-if task == "Summary (raw tables)":
 
-    st.subheader("📋 Coil-level Data (Offline measurements only)")
-    st.caption("≥ 30 coils | No averaging | Raw data only")
-
-    for _, cond in valid_conditions.iterrows():
-
-        spec, mat, coat, gauge, n = (
-            cond["Product_Spec"],
-            cond["Material"],
-            cond["Top_Coatmass"],
-            cond["Order_Gauge"],
-            int(cond["N_Coils"])
-        )
-
-        st.markdown(
-            f"## 🧱 Product Spec: `{spec}`  \n"
-            f"**Material:** {mat} | **Coatmass:** {coat} | **Gauge:** {gauge}  \n"
-            f"➡️ **n = {n} coils**"
-        )
-
-        table_df = df[
-            (df["Product_Spec"] == spec) &
-            (df["Material"] == mat) &
-            (df["Top_Coatmass"] == coat) &
-            (df["Order_Gauge"] == gauge)
-        ][[
-            "COIL_NO",
-            "Std_Min", "Std_Max",
-            "Hardness_LAB", "Hardness_LINE",
-            "YS", "TS", "EL"
-        ]].sort_values("COIL_NO")
-
-        st.dataframe(table_df, use_container_width=True)
-
-# =========================================================
 # QA STRICT SPEC CHECK
 # =========================================================
 if task == "QA Strict Spec Check (1 NG = FAIL)":
@@ -233,6 +196,7 @@ if task == "QA Strict Spec Check (1 NG = FAIL)":
             (df["Top_Coatmass"] == coat) &
             (df["Order_Gauge"] == gauge)
         ].copy()
+sub = sub.sort_values("COIL_NO").reset_index(drop=True)
 
         lo = sub["Std_Min"].iloc[0]
         hi = sub["Std_Max"].iloc[0]
@@ -295,6 +259,7 @@ if task == "QA Strict + Chart":
             int(cond["N_Coils"])
         )
 
+        # ===== FILTER DATA =====
         sub = df[
             (df["Product_Spec"] == spec) &
             (df["Material"] == mat) &
@@ -302,10 +267,13 @@ if task == "QA Strict + Chart":
             (df["Order_Gauge"] == gauge)
         ].copy()
 
+        # ===== SORT BY COIL_NO (RẤT QUAN TRỌNG) =====
+        sub = sub.sort_values("COIL_NO").reset_index(drop=True)
+
         lo = sub["Std_Min"].iloc[0]
         hi = sub["Std_Max"].iloc[0]
 
-        # ===== QA STRICT LOGIC (GIỐNG 100%) =====
+        # ===== QA STRICT LOGIC =====
         sub["NG_LAB"]  = (sub["Hardness_LAB"]  < lo) | (sub["Hardness_LAB"]  > hi)
         sub["NG_LINE"] = (sub["Hardness_LINE"] < lo) | (sub["Hardness_LINE"] > hi)
         sub["COIL_NG"] = sub["NG_LAB"] | sub["NG_LINE"]
@@ -313,7 +281,7 @@ if task == "QA Strict + Chart":
         n_out = sub[sub["COIL_NG"]]["COIL_NO"].nunique()
         qa_result = "FAIL" if n_out > 0 else "PASS"
 
-        # ===== HIỂN THỊ GIỐNG QA STRICT =====
+        # ===== HEADER =====
         st.markdown(
             f"## 🧱 Product Spec: `{spec}`  \n"
             f"**Material:** {mat} | **Coatmass:** {coat} | **Gauge:** {gauge}  \n"
@@ -322,6 +290,7 @@ if task == "QA Strict + Chart":
             f"🧪 **QA Result:** `{qa_result}`"
         )
 
+        # ===== TABLE =====
         st.dataframe(
             sub[
                 [
@@ -330,23 +299,26 @@ if task == "QA Strict + Chart":
                     "Hardness_LAB", "Hardness_LINE",
                     "NG_LAB", "NG_LINE"
                 ]
-            ].sort_values("COIL_NO"),
+            ],
             use_container_width=True
         )
 
-        # ===== BIỂU ĐỒ (CHỈ THÊM, KHÔNG ĐỔI FORMAT) =====
+        # ===== CHART =====
         fig, ax = plt.subplots(figsize=(6, 3))
 
         ok = sub[~sub["COIL_NG"]]
         ng = sub[sub["COIL_NG"]]
 
-        ax.plot(ok.index + 1, ok["Hardness_LINE"], marker="o", label="OK")
-        ax.plot(ng.index + 1, ng["Hardness_LINE"], marker="o", linestyle="", label="NG")
+        x_ok = ok.index + 1
+        x_ng = ng.index + 1
+
+        ax.plot(x_ok, ok["Hardness_LINE"], marker="o", label="OK")
+        ax.plot(x_ng, ng["Hardness_LINE"], marker="o", linestyle="", label="NG")
 
         ax.axhline(lo, linestyle="--", label="LSL")
         ax.axhline(hi, linestyle="--", label="USL")
 
-        ax.set_xlabel("Coil Order")
+        ax.set_xlabel("Coil Order (sorted by COIL_NO)")
         ax.set_ylabel("Hardness LINE (HRB)")
         ax.set_title(f"{spec} | {qa_result}")
         ax.legend()
