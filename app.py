@@ -395,80 +395,86 @@ sub["MECH_PASS"] = sub["YS_PASS"] & sub["TS_PASS"] & sub["EL_PASS"]
         )
 
 elif view_mode == "📐 Hardness Safety Analysis":
-        def plot_igf(ax, data, label):
-            mu = data.mean()
-            sigma = data.std(ddof=1)
-        
-            x = np.linspace(data.min(), data.max(), 200)
-            y = (
-                1 / (sigma * np.sqrt(2 * np.pi)) *
-                np.exp(-0.5 * ((x - mu) / sigma) ** 2)
-            )
-        
-            ax.plot(x, y, linestyle="--", linewidth=2, label=f"{label} IGF")
-st.markdown("## 📊 Hardness Distribution + IGF (Bin = 1 HRB)")
 
-c1, c2 = st.columns(2)
-with c1:
-    fig, ax = plt.subplots(figsize=(5,4))
+    lab_df  = sub[sub["Hardness_LAB"]  > 0]
+    line_df = sub[sub["Hardness_LINE"] > 0]
 
-    ax.hist(
-        lab_df["Hardness_LAB"],
-        bins=np.arange(
-            lab_df["Hardness_LAB"].min(),
-            lab_df["Hardness_LAB"].max() + 1,
-            1
-        ),
-        density=True,
-        alpha=0.6
-    )
+    st.markdown("## 📊 Hardness Distribution + IGF (Bin = 1 HRB)")
 
-    plot_igf(ax, lab_df["Hardness_LAB"], "LAB")
+    c1, c2 = st.columns(2)
 
-    ax.set_title("LAB Hardness Distribution")
-    ax.set_xlabel("Hardness (HRB)")
-    ax.set_ylabel("Density")
-    ax.grid(alpha=0.3)
-    ax.legend()
+    # ===== LAB =====
+    with c1:
+        fig, ax = plt.subplots(figsize=(5,4))
 
-    st.pyplot(fig)
+        ax.hist(
+            lab_df["Hardness_LAB"],
+            bins=np.arange(
+                np.floor(lab_df["Hardness_LAB"].min()),
+                np.ceil(lab_df["Hardness_LAB"].max()) + 1,
+                1
+            ),
+            density=True,
+            alpha=0.6,
+            edgecolor="black",
+            label="LAB"
+        )
 
-    st.download_button(
-        "⬇️ Download LAB Distribution",
-        data=fig_to_png(fig),
-        file_name="LAB_hardness_distribution.png",
-        mime="image/png",
-        key="dl_lab_igf"
-    )
-with c2:
-    fig, ax = plt.subplots(figsize=(5,4))
+        plot_igf(ax, lab_df["Hardness_LAB"], "LAB")
 
-    ax.hist(
-        line_df["Hardness_LINE"],
-        bins=np.arange(
-            line_df["Hardness_LINE"].min(),
-            line_df["Hardness_LINE"].max() + 1,
-            1
-        ),
-        density=True,
-        alpha=0.6
-    )
+        ax.axvline(lo, linestyle="--", linewidth=1, label="LSL")
+        ax.axvline(hi, linestyle="--", linewidth=1, label="USL")
 
-    plot_igf(ax, line_df["Hardness_LINE"], "LINE")
+        ax.set_title("LAB Hardness + IGF")
+        ax.set_xlabel("Hardness (HRB)")
+        ax.set_ylabel("Density")
+        ax.grid(alpha=0.3)
+        ax.legend(bbox_to_anchor=(1.02, 0.5), loc="center left", frameon=False)
 
-    ax.set_title("LINE Hardness Distribution")
-    ax.set_xlabel("Hardness (HRB)")
-    ax.set_ylabel("Density")
-    ax.grid(alpha=0.3)
-    ax.legend()
+        st.pyplot(fig)
 
-    st.pyplot(fig)
+        st.download_button(
+            "⬇️ Download LAB IGF",
+            data=fig_to_png(fig),
+            file_name=f"{spec}_LAB_IGF.png",
+            mime="image/png",
+            key=f"dl_lab_igf_{spec}_{mat}_{gauge}_{coat}"
+        )
 
-    st.download_button(
-        "⬇️ Download LINE Distribution",
-        data=fig_to_png(fig),
-        file_name="LINE_hardness_distribution.png",
-        mime="image/png",
-        key="dl_line_igf"
-    )
+    # ===== LINE =====
+    with c2:
+        fig, ax = plt.subplots(figsize=(5,4))
 
+        ax.hist(
+            line_df["Hardness_LINE"],
+            bins=np.arange(
+                np.floor(line_df["Hardness_LINE"].min()),
+                np.ceil(line_df["Hardness_LINE"].max()) + 1,
+                1
+            ),
+            density=True,
+            alpha=0.6,
+            edgecolor="black",
+            label="LINE"
+        )
+
+        plot_igf(ax, line_df["Hardness_LINE"], "LINE")
+
+        ax.axvline(lo, linestyle="--", linewidth=1, label="LSL")
+        ax.axvline(hi, linestyle="--", linewidth=1, label="USL")
+
+        ax.set_title("LINE Hardness + IGF")
+        ax.set_xlabel("Hardness (HRB)")
+        ax.set_ylabel("Density")
+        ax.grid(alpha=0.3)
+        ax.legend(bbox_to_anchor=(1.02, 0.5), loc="center left", frameon=False)
+
+        st.pyplot(fig)
+
+        st.download_button(
+            "⬇️ Download LINE IGF",
+            data=fig_to_png(fig),
+            file_name=f"{spec}_LINE_IGF.png",
+            mime="image/png",
+            key=f"dl_line_igf_{spec}_{mat}_{gauge}_{coat}"
+        )
