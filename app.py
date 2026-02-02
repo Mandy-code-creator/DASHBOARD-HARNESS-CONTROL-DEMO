@@ -6,7 +6,7 @@ from io import StringIO
 # ================================
 # BUTTON REFRESH GOOGLE SHEET
 # ================================
-if st.sidebar.button("🔄 Cập nhật dữ liệu Google Sheet"):
+if st.sidebar.button("🔄 Refresh Data"):
     st.cache_data.clear()
     st.rerun()
 # ================================
