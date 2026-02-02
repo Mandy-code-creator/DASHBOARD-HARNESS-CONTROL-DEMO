@@ -221,7 +221,7 @@ if view_mode == "📋 Data Table":
     )
 
     # ================================
-    elif view_mode == "📈 Trend (LAB / LINE)":
+elif view_mode == "📈 Trend (LAB / LINE)":
 
     sub = sub.sort_values("COIL_NO").reset_index(drop=True)
     sub["X"] = sub.index + 1
