@@ -3,6 +3,8 @@ import pandas as pd
 import numpy as np
 import requests
 from io import StringIO
+import matplotlib.pyplot as plt
+
 # ================================
 # BUTTON REFRESH GOOGLE SHEET
 # ================================
@@ -277,3 +279,78 @@ if task == "QA Strict Spec Check (1 NG = FAIL)":
             sub[show_cols].sort_values("COIL_NO"),
             use_container_width=True
         )
+        # =========================
+        # PREPARE DATA FOR CHART
+        # =========================
+        sub_plot = sub.sort_values("COIL_NO").reset_index(drop=True).copy()
+        sub_plot["X"] = sub_plot.index + 1
+
+        # ❌ KHÔNG VẼ HARDNESS = 0
+        lab_df  = sub_plot[sub_plot["Hardness_LAB"]  > 0]
+        line_df = sub_plot[sub_plot["Hardness_LINE"] > 0]
+
+        # Y SCALE (INTEGER STEP)
+        y_min = int(np.floor(min(lo, lab_df["Hardness_LAB"].min(), line_df["Hardness_LINE"].min())))
+        y_max = int(np.ceil (max(hi, lab_df["Hardness_LAB"].max(), line_df["Hardness_LINE"].max())))
+
+        # =========================
+        # CHART 1 — HARDNESS LAB
+        # =========================
+        fig_lab, ax_lab = plt.subplots(figsize=(9, 3))
+
+        ax_lab.plot(
+            lab_df["X"],
+            lab_df["Hardness_LAB"],
+            marker="o",
+            linewidth=2,
+            label="LAB"
+        )
+
+        ax_lab.axhline(lo, linestyle="--", linewidth=1, label="LSL")
+        ax_lab.axhline(hi, linestyle="--", linewidth=1, label="USL")
+
+        ax_lab.set_title(f"{spec} | Hardness LAB")
+        ax_lab.set_ylabel("HRB")
+        ax_lab.set_xlabel("Coil order (by COIL_NO)")
+        ax_lab.set_ylim(y_min, y_max)
+        ax_lab.set_yticks(range(y_min, y_max + 1))
+        ax_lab.grid(alpha=0.3)
+
+        ax_lab.legend(
+            loc="center left",
+            bbox_to_anchor=(1.02, 0.5),
+            frameon=False
+        )
+
+        st.pyplot(fig_lab)
+
+        # =========================
+        # CHART 2 — HARDNESS LINE
+        # =========================
+        fig_line, ax_line = plt.subplots(figsize=(9, 3))
+
+        ax_line.plot(
+            line_df["X"],
+            line_df["Hardness_LINE"],
+            marker="o",
+            linewidth=2,
+            label="LINE"
+        )
+
+        ax_line.axhline(lo, linestyle="--", linewidth=1, label="LSL")
+        ax_line.axhline(hi, linestyle="--", linewidth=1, label="USL")
+
+        ax_line.set_title(f"{spec} | Hardness LINE")
+        ax_line.set_ylabel("HRB")
+        ax_line.set_xlabel("Coil order (by COIL_NO)")
+        ax_line.set_ylim(y_min, y_max)
+        ax_line.set_yticks(range(y_min, y_max + 1))
+        ax_line.grid(alpha=0.3)
+
+        ax_line.legend(
+            loc="center left",
+            bbox_to_anchor=(1.02, 0.5),
+            frameon=False
+        )
+
+        st.pyplot(fig_line)
