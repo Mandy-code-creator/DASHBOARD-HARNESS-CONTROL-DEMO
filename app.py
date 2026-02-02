@@ -109,26 +109,20 @@ task = st.sidebar.radio(
     ],
     index=0
 )
+# ================================
 # METALLIC COATING TYPE FILTER
 # ================================
-st.sidebar.header("🧲 METALLIC COATING TYPE")
+st.sidebar.header("🎛 METALLIC COATING TYPE")
 
-metal_types = (
-    df["Metallic_Type"]
-    .dropna()
-    .astype(str)
-    .unique()
-)
+metallic_types = sorted(df["Metallic_Type"].dropna().unique())
 
-metal_types = sorted(metal_types)
-
-selected_metal = st.sidebar.multiselect(
+selected_metallic = st.sidebar.radio(
     "Select Metallic Coating Type",
-    metal_types,
-    default=metal_types
+    metallic_types
 )
 
-df = df[df["Metallic_Type"].isin(selected_metal)]
+df = df[df["Metallic_Type"] == selected_metallic]
+
 # ================================
 # QUALITY CODE FILTER
 # ================================
