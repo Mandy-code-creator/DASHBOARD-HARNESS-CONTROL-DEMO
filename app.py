@@ -22,6 +22,7 @@ def load_data(url):
     return pd.read_csv(StringIO(r.text))
 
 raw = load_data(DATA_URL)
+st.write("RAW COLUMNS:", list(raw.columns))
 
 # ================================
 # COLUMN MAPPING
