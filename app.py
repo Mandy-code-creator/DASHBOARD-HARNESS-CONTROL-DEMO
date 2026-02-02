@@ -187,45 +187,22 @@ for _, cond in valid_conditions.iterrows():
 
     # ================================
     # VIEW 1 — TABLE
-    # ================================
+# ================================
 # VIEW 1 — DATA TABLE
 # ================================
 if view_mode == "📋 Data":
 
     display_cols = [
         "COIL_NO",
-
-        # Hardness standard
         "Std_Min", "Std_Max",
-
-        # Hardness actual
         "Hardness_LAB", "Hardness_LINE",
         "Δ_LINE_LAB",
-
-        # Hardness judgement
         "OOL_LAB", "OOL_LINE",
         "NG_LAB", "NG_LINE",
-
-        # Mechanical standard
-        "Standard_YS_min", "Standard_YS_max",
-        "Standard_TS_min", "Standard_TS_max",
-        "Standard_EL_min", "Standard_EL_max",
-
-        # Mechanical actual
         "YS", "TS", "El"
     ]
 
     table_df = sub[display_cols].copy()
-
-    # Optional: làm gọn số
-    table_df = table_df.round({
-        "Hardness_LAB": 1,
-        "Hardness_LINE": 1,
-        "Δ_LINE_LAB": 1,
-        "YS": 0,
-        "TS": 0,
-        "El": 0
-    })
 
     st.dataframe(
         table_df,
