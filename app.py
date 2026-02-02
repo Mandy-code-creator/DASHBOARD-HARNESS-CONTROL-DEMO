@@ -34,9 +34,9 @@ raw = load_data(DATA_URL)
 # ================================
 metal_col = None
 for c in raw.columns:
-if "METALLIC" in c.upper() and "COATING" in c.upper():
-metal_col = c
-break
+    if "METALLIC" in c.upper() and "COATING" in c.upper():
+    metal_col = c
+    break
 
 if metal_col is None:
 st.error("❌ Cannot find METALLIC COATING TYPE column in raw data")
