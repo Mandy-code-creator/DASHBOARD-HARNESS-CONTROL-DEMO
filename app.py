@@ -187,155 +187,86 @@ for _, cond in valid_conditions.iterrows():
     )
 
     # ================================
-    # VIEW 1 — TABLE
-# =========================
-# VIEW 1 — DATA TABLE
-# =========================
-if view_mode == "📋 Data Table":
+     # ================================
+    # VIEW 1 — DATA TABLE
+    # ================================
+    if view_mode == "📋 Data Table":
 
-    show_cols = [
-        "COIL_NO",
-        "Std_Min", "Std_Max",
+        show_cols = [
+            "COIL_NO",
+            "Std_Min", "Std_Max",
+            "Hardness_LAB", "Hardness_LINE",
+            "NG_LAB", "NG_LINE",
+            "YS", "TS", "EL",
+            "Standard_YS_Min", "Standard_YS_Max",
+            "Standard_TS_Min", "Standard_TS_Max",
+            "Standard_EL_Min", "Standard_EL_Max",
+        ]
 
-        # ⬇️ HARDNESS
-        "Hardness_LAB", "Hardness_LINE",
-        "Δ_LINE_LAB",
-        "OOL_LAB", "OOL_LINE",
-        "NG_LAB", "NG_LINE",
+        show_cols = [c for c in show_cols if c in sub.columns]
 
-        # ⬇️ MECHANICAL
-        "YS", "TS", "EL",
-
-        # ⬇️ STANDARD MECHANICAL (MỚI)
-        "Standard_YS_Min", "Standard_YS_Max",
-        "Standard_TS_Min", "Standard_TS_Max",
-        "Standard_EL_Min", "Standard_EL_Max",
-    ]
-
-    # chỉ hiển thị cột tồn tại
-    show_cols = [c for c in show_cols if c in sub.columns]
-
-    st.dataframe(
-        sub[show_cols].sort_values("COIL_NO"),
-        use_container_width=True
-    )
+        st.dataframe(
+            sub[show_cols].sort_values("COIL_NO"),
+            use_container_width=True
+        )
 
     # ================================
-elif view_mode == "📈 Trend (LAB / LINE)":
+    # VIEW 2 — TREND
+    # ================================
+    elif view_mode == "📈 Trend (LAB / LINE)":
 
-    sub = sub.sort_values("COIL_NO").reset_index(drop=True)
-    sub["X"] = sub.index + 1
+        sub["X"] = np.arange(1, len(sub) + 1)
 
-    lab_df  = sub[sub["Hardness_LAB"]  > 0]
-    line_df = sub[sub["Hardness_LINE"] > 0]
+        lab_df  = sub[sub["Hardness_LAB"]  > 0]
+        line_df = sub[sub["Hardness_LINE"] > 0]
 
-    y_min = np.floor(min(lo, lab_df["Hardness_LAB"].min(), line_df["Hardness_LINE"].min()))
-    y_max = np.ceil (max(hi, lab_df["Hardness_LAB"].max(), line_df["Hardness_LINE"].max()))
+        y_min = np.floor(min(lo, lab_df["Hardness_LAB"].min(), line_df["Hardness_LINE"].min()))
+        y_max = np.ceil (max(hi, lab_df["Hardness_LAB"].max(), line_df["Hardness_LINE"].max()))
 
-    c1, c2 = st.columns(2)
+        c1, c2 = st.columns(2)
 
-    with c1:
-        fig, ax = plt.subplots(figsize=(5,3))
-        ax.plot(lab_df["X"], lab_df["Hardness_LAB"], marker="o", label="LAB")
-        ax.axhline(lo, linestyle="--", label="LSL")
-        ax.axhline(hi, linestyle="--", label="USL")
-        ax.set_ylim(y_min, y_max)
-        ax.set_yticks(np.arange(y_min, y_max+0.01, 2.5))
-        ax.set_title("Hardness LAB")
+        with c1:
+            fig, ax = plt.subplots(figsize=(5,3))
+            ax.plot(lab_df["X"], lab_df["Hardness_LAB"], marker="o")
+            ax.axhline(lo, linestyle="--")
+            ax.axhline(hi, linestyle="--")
+            ax.set_ylim(y_min, y_max)
+            ax.set_yticks(np.arange(y_min, y_max+0.01, 2.5))
+            ax.set_title("Hardness LAB")
+            ax.grid(alpha=0.3)
+            st.pyplot(fig)
+
+        with c2:
+            fig, ax = plt.subplots(figsize=(5,3))
+            ax.plot(line_df["X"], line_df["Hardness_LINE"], marker="o")
+            ax.axhline(lo, linestyle="--")
+            ax.axhline(hi, linestyle="--")
+            ax.set_ylim(y_min, y_max)
+            ax.set_yticks(np.arange(y_min, y_max+0.01, 2.5))
+            ax.set_title("Hardness LINE")
+            ax.grid(alpha=0.3)
+            st.pyplot(fig)
+
+    # ================================
+    # VIEW 3 — DISTRIBUTION
+    # ================================
+    elif view_mode == "📊 Distribution":
+
+        lab_df  = sub[sub["Hardness_LAB"]  > 0]
+        line_df = sub[sub["Hardness_LINE"] > 0]
+
+        fig, ax = plt.subplots(figsize=(6,4))
+
+        ax.hist(lab_df["Hardness_LAB"], bins=10, alpha=0.5, label="LAB")
+        ax.hist(line_df["Hardness_LINE"], bins=10, alpha=0.5, label="LINE")
+
+        ax.axvline(lo, linestyle="--", label="LSL")
+        ax.axvline(hi, linestyle="--", label="USL")
+
+        ax.set_title(f"{spec} | Hardness Distribution")
+        ax.set_xlabel("HRB")
+        ax.set_ylabel("Count")
+        ax.legend()
         ax.grid(alpha=0.3)
-        ax.legend(frameon=False)
+
         st.pyplot(fig)
-
-    with c2:
-        fig, ax = plt.subplots(figsize=(5,3))
-        ax.plot(line_df["X"], line_df["Hardness_LINE"], marker="o", label="LINE")
-        ax.axhline(lo, linestyle="--", label="LSL")
-        ax.axhline(hi, linestyle="--", label="USL")
-        ax.set_ylim(y_min, y_max)
-        ax.set_yticks(np.arange(y_min, y_max+0.01, 2.5))
-        ax.set_title("Hardness LINE")
-        ax.grid(alpha=0.3)
-        ax.legend(frameon=False)
-        st.pyplot(fig)
-
-# ================================
-# VIEW 3 — DISTRIBUTION
-# ================================
-elif view_mode == "📊 Distribution":
-
-    sub_dist = sub.sort_values("COIL_NO").reset_index(drop=True).copy()
-
-    lab_df  = sub_dist[sub_dist["Hardness_LAB"]  > 0]
-    line_df = sub_dist[sub_dist["Hardness_LINE"] > 0]
-
-    fig, ax = plt.subplots(figsize=(6, 4))
-
-    # ===== HISTOGRAM =====
-    bins = 10
-
-    lab_counts, lab_bins, _ = ax.hist(
-        lab_df["Hardness_LAB"],
-        bins=bins,
-        alpha=0.5,
-        label="LAB",
-        edgecolor="black"
-    )
-
-    line_counts, line_bins, _ = ax.hist(
-        line_df["Hardness_LINE"],
-        bins=bins,
-        alpha=0.5,
-        label="LINE",
-        edgecolor="black"
-    )
-
-    # ===== NORMAL CURVE (LAB) =====
-    mu_lab  = lab_df["Hardness_LAB"].mean()
-    std_lab = lab_df["Hardness_LAB"].std()
-
-    x_lab = np.linspace(lab_bins.min(), lab_bins.max(), 200)
-    pdf_lab = (
-        1 / (std_lab * np.sqrt(2 * np.pi))
-        * np.exp(-0.5 * ((x_lab - mu_lab) / std_lab) ** 2)
-    )
-
-    ax.plot(
-        x_lab,
-        pdf_lab * len(lab_df) * (lab_bins[1] - lab_bins[0]),
-        linestyle="--",
-        linewidth=2,
-        label="LAB Normal"
-    )
-
-    # ===== NORMAL CURVE (LINE) =====
-    mu_line  = line_df["Hardness_LINE"].mean()
-    std_line = line_df["Hardness_LINE"].std()
-
-    x_line = np.linspace(line_bins.min(), line_bins.max(), 200)
-    pdf_line = (
-        1 / (std_line * np.sqrt(2 * np.pi))
-        * np.exp(-0.5 * ((x_line - mu_line) / std_line) ** 2)
-    )
-
-    ax.plot(
-        x_line,
-        pdf_line * len(line_df) * (line_bins[1] - line_bins[0]),
-        linestyle="--",
-        linewidth=2,
-        label="LINE Normal"
-    )
-
-    # ===== SPEC LIMIT =====
-    ax.axvline(lo, linestyle="--", linewidth=1, label="LSL")
-    ax.axvline(hi, linestyle="--", linewidth=1, label="USL")
-
-    ax.set_title(f"{spec} | Hardness Distribution + Normal Curve")
-    ax.set_xlabel("HRB")
-    ax.set_ylabel("Count")
-    ax.legend()
-    ax.grid(alpha=0.3)
-
-    st.pyplot(fig)
-
-
-
