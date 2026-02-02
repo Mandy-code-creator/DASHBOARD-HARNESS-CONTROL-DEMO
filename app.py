@@ -360,11 +360,20 @@ for _, cond in valid_conditions.iterrows():
         )
     
         # ===== FINAL STYLE =====
-        ax.set_title(f"{spec} | Hardness Distribution + Normal Curve")
+        ax.set_title(f"{spec} | Hardness Distribution")
         ax.set_xlabel("HRB")
         ax.set_ylabel("Count")
         ax.legend(bbox_to_anchor=(1.02, 0.5), loc="center left", frameon=False)
         ax.grid(alpha=0.3)
     
         st.pyplot(fig)
+        img = fig_to_png(fig)
+        st.download_button(
+            "⬇️ Download Distribution Chart",
+            data=img,
+            file_name=f"{spec}_hardness_distribution.png",
+            mime="image/png",
+            key=f"dl_dist_{spec}_{mat}_{gauge}_{coat}"
+        )
+
 
