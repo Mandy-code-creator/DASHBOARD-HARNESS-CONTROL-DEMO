@@ -3,8 +3,6 @@ import pandas as pd
 import numpy as np
 import requests
 from io import StringIO
-import matplotlib.pyplot as plt
-
 # ================================
 # BUTTON REFRESH GOOGLE SHEET
 # ================================
@@ -107,12 +105,10 @@ task = st.sidebar.radio(
     "Select analysis task",
     [
         "Summary (raw tables)",
-        "QA Strict Spec Check (1 NG = FAIL)",
-        "Analyze – All Conditions (Chart View)"
+        "QA Strict Spec Check (1 NG = FAIL)"
     ],
     index=0
 )
-
 # ================================
 # ROLLING TYPE FILTER (FROM SHEET)
 # ================================
@@ -170,7 +166,6 @@ valid_conditions = (
 if valid_conditions.empty:
     st.warning("⚠️ No condition has ≥ 30 coils")
     st.stop()
-col_left, col_right = st.columns([1.2, 1.5])
 
 # =========================================================
 # SUMMARY
@@ -282,52 +277,3 @@ if task == "QA Strict Spec Check (1 NG = FAIL)":
             sub[show_cols].sort_values("COIL_NO"),
             use_container_width=True
         )
-         # =====Analyze – All Conditions
-if task == "Analyze – All Conditions (Chart View)":
-   with col_left:
-    st.subheader("📋 Summary – Filtered Conditions")
-
-    st.write("Applied filters:")
-    st.write(f"- Quality Code: {selected_qc}")
-    st.write(f"- Total conditions: {len(valid_conditions)}")
-
-    st.dataframe(valid_conditions, use_container_width=True)
-with col_right:
-    st.subheader("📈 Hardness Trend (All Conditions)")
-    for _, cond in valid_conditions.iterrows():
-
-        spec = cond["Product_Spec"]
-        mat = cond["Material"]
-        coat = cond["Top_Coatmass"]
-        gauge = cond["Order_Gauge"]
-
-        sub = df[
-            (df["Product_Spec"] == spec) &
-            (df["Material"] == mat) &
-            (df["Top_Coatmass"] == coat) &
-            (df["Order_Gauge"] == gauge)
-        ].copy()
-
-        lo = sub["Std_Min"].iloc[0]
-        hi = sub["Std_Max"].iloc[0]
-        mean = sub["Hardness_LINE"].mean()
-
-        fig, ax = plt.subplots(figsize=(6, 3))
-
-        ax.plot(
-            sub.index + 1,
-            sub["Hardness_LINE"],
-            marker="o",
-            linewidth=1
-        )
-
-        ax.axhline(lo, linestyle="--", label="LSL")
-        ax.axhline(hi, linestyle="--", label="USL")
-        ax.axhline(mean, linestyle="-.", label="Mean")
-
-        ax.set_title(f"{spec} | {mat} | {coat} | {gauge}")
-        ax.set_xlabel("Coil Order")
-        ax.set_ylabel("Hardness (HRB)")
-        ax.legend()
-
-        st.pyplot(fig)
