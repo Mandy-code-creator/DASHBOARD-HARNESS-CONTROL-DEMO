@@ -258,6 +258,25 @@ if task == "QA Strict + Chart":
         )
 
       # ===== PREPARE X AXIS =====
+for _, cond in valid_conditions.iterrows():
+
+    spec, mat, coat, gauge, n = (
+        cond["Product_Spec"],
+        cond["Material"],
+        cond["Top_Coatmass"],
+        cond["Order_Gauge"],
+        int(cond["N_Coils"])
+    )
+
+    sub = df[
+        (df["Product_Spec"] == spec) &
+        (df["Material"] == mat) &
+        (df["Top_Coatmass"] == coat) &
+        (df["Order_Gauge"] == gauge)
+    ].copy()
+
+    sub = sub.sort_values("COIL_NO").reset_index(drop=True)
+
 sub = df[
     (df["Product_Spec"] == spec) &
     (df["Material"] == mat) &
