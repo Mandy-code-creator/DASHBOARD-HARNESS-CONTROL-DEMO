@@ -9,8 +9,8 @@ import matplotlib.pyplot as plt
 # BUTTON REFRESH GOOGLE SHEET
 # ================================
 if st.sidebar.button("🔄 Refresh Data"):
-st.cache_data.clear()
-st.rerun()
+    st.cache_data.clear()
+    st.rerun()
 # ================================
 # CONFIG
 # ================================
