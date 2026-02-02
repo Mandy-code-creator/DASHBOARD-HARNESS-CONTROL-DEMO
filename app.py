@@ -257,9 +257,9 @@ if task == "QA Strict + Chart":
         )
 
         # ===== CHART =====
+# ===== CHART =====
 fig, ax = plt.subplots(figsize=(6, 3))
 
-# ❗ CHỈ DÙNG DATA HARDNESS > 0 ĐỂ VẼ
 plot_df = sub[sub["Hardness_LINE"] > 0]
 
 ok = plot_df[~plot_df["COIL_NG"]]
@@ -274,9 +274,23 @@ ax.plot(x_ng, ng["Hardness_LINE"], marker="o", linestyle="", label="NG")
 ax.axhline(lo, linestyle="--", label="LSL")
 ax.axhline(hi, linestyle="--", label="USL")
 
+# ✅ Y-AXIS: STEP = 1 (55, 56, 57, ...)
+ax.set_yticks(
+    np.arange(
+        int(np.floor(lo)) - 1,
+        int(np.ceil(hi)) + 2,
+        1
+    )
+)
+
 ax.set_xlabel("Coil Order (sorted by COIL_NO)")
 ax.set_ylabel("Hardness LINE (HRB)")
 ax.set_title(f"{spec} | {qa_result}")
-ax.legend()
+
+ax.legend(
+    loc="upper left",
+    bbox_to_anchor=(1.02, 1),
+    borderaxespad=0
+)
 
 st.pyplot(fig)
