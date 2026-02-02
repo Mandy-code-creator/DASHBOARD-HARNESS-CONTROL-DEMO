@@ -280,8 +280,9 @@ if task == "QA Strict Spec Check (1 NG = FAIL)":
             sub[show_cols].sort_values("COIL_NO"),
             use_container_width=True
         )
+         # =====Analyze – All Conditions
 if task == "Analyze – All Conditions (Chart View)":
-with col_left:
+   with col_left:
     st.subheader("📋 Summary – Filtered Conditions")
 
     st.write("Applied filters:")
