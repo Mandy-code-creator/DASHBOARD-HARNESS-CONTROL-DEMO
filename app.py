@@ -23,6 +23,17 @@ def load_data(url):
 
 raw = load_data(DATA_URL)
 st.write("RAW COLUMNS:", list(raw.columns))
+# ================================
+# FORCE CLEAN COLUMN NAMES (HARD FIX)
+# ================================
+raw.columns = (
+    raw.columns
+        .astype(str)
+        .str.replace("\u00A0", " ", regex=False)  # NBSP
+        .str.replace("\t", " ", regex=False)
+        .str.replace("\n", " ", regex=False)
+        .str.strip()
+)
 
 # ================================
 # COLUMN MAPPING
