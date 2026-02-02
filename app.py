@@ -3,6 +3,8 @@ import pandas as pd
 import numpy as np
 import requests
 from io import StringIO
+import matplotlib.pyplot as plt
+
 # ================================
 # BUTTON REFRESH GOOGLE SHEET
 # ================================
