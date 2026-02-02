@@ -109,15 +109,6 @@ task = st.sidebar.radio(
     ],
     index=0
 )
-
-# ================================
-# QUALITY CODE FILTER
-# ================================
-st.sidebar.header("🎛 QUALITY CODE")
-quality_codes = sorted(df["Quality_Code"].dropna().unique())
-selected_qc = st.sidebar.radio("Select Quality Code", quality_codes)
-df = df[df["Quality_Code"] == selected_qc]
-# ================================
 # METALLIC COATING TYPE FILTER
 # ================================
 st.sidebar.header("🧲 METALLIC COATING TYPE")
@@ -138,6 +129,15 @@ selected_metal = st.sidebar.multiselect(
 )
 
 df = df[df["Metallic_Type"].isin(selected_metal)]
+# ================================
+# QUALITY CODE FILTER
+# ================================
+st.sidebar.header("🎛 QUALITY CODE")
+quality_codes = sorted(df["Quality_Code"].dropna().unique())
+selected_qc = st.sidebar.radio("Select Quality Code", quality_codes)
+df = df[df["Quality_Code"] == selected_qc]
+# ================================
+
 
 # ================================
 # GROUP + COUNT (>=30 coils)
