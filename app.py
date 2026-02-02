@@ -253,21 +253,21 @@ for _, cond in valid_conditions.iterrows():
     # ================================
     elif view_mode == "📊 Distribution":
         # ===== POWER BI CARD HEADER =====
-    st.markdown(
-        f"""
-        <div style="
-            border:1px solid #d0d0d0;
-            border-radius:8px;
-            padding:12px;
-            margin-bottom:16px;
-            background-color:#ffffff;
-        ">
-            <h4 style="margin:0; color:#333;">
-                📊 {spec} — Hardness Distribution
-            </h4>
-        """,
-        unsafe_allow_html=True
-    )
+        st.markdown(
+            f"""
+            <div style="
+                border:1px solid #d0d0d0;
+                border-radius:8px;
+                padding:12px;
+                margin-bottom:16px;
+                background-color:#ffffff;
+            ">
+                <h4 style="margin:0; color:#333;">
+                    📊 {spec} — Hardness Distribution
+                </h4>
+            """,
+            unsafe_allow_html=True
+        )
     # ===== FILTER DATA =====
     lab_df  = sub[sub["Hardness_LAB"]  > 0]
     line_df = sub[sub["Hardness_LINE"] > 0]
