@@ -134,6 +134,7 @@ view_mode = st.sidebar.radio(
     ["📋 Data Table","📈 Trend (LAB / LINE)","📊 Distribution"],
     index=0
 )
+st.write("DEBUG view_mode =", view_mode)
 
 # ================================
 # GROUP CONDITION (≥30 COILS)
