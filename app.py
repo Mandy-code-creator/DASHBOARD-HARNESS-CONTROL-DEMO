@@ -313,7 +313,7 @@ if task == "QA Strict Spec Check (1 NG = FAIL)":
         ax_lab.set_ylabel("HRB")
         ax_lab.set_xlabel("Coil order (by COIL_NO)")
         ax_lab.set_ylim(y_min, y_max)
-        ax_lab.set_yticks(range(y_min, y_max + 1))
+        ax_lab.set_yticks(np.arange(y_min, y_max + 0.01, 2.5))
         ax_lab.grid(alpha=0.3)
 
         ax_lab.legend(
@@ -344,7 +344,7 @@ if task == "QA Strict Spec Check (1 NG = FAIL)":
         ax_line.set_ylabel("HRB")
         ax_line.set_xlabel("Coil order (by COIL_NO)")
         ax_line.set_ylim(y_min, y_max)
-        ax_line.set_yticks(range(y_min, y_max + 1))
+        ax_line.set_yticks(np.arange(y_min, y_max + 0.01, 2.5))
         ax_line.grid(alpha=0.3)
 
         ax_line.legend(
