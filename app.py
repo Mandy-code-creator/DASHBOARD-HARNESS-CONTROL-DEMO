@@ -254,6 +254,12 @@ for _, cond in valid_conditions.iterrows():
 
         lab_df  = sub[sub["Hardness_LAB"]  > 0]
         line_df = sub[sub["Hardness_LINE"] > 0]
+    # ===== STATISTIC =====
+    mu_lab  = lab_df["Hardness_LAB"].mean()
+    std_lab = lab_df["Hardness_LAB"].std()
+    
+    mu_line  = line_df["Hardness_LINE"].mean()
+    std_line = line_df["Hardness_LINE"].std()
 
         fig, ax = plt.subplots(figsize=(6,4))
 
@@ -268,5 +274,44 @@ for _, cond in valid_conditions.iterrows():
         ax.set_ylabel("Count")
         ax.legend()
         ax.grid(alpha=0.3)
+# ===== NORMAL CURVE LAB =====
+if std_lab > 0:
+    x_lab = np.linspace(mu_lab - 3*std_lab, mu_lab + 3*std_lab, 400)
+    pdf_lab = (1/(std_lab*np.sqrt(2*np.pi))) * np.exp(-0.5*((x_lab-mu_lab)/std_lab)**2)
+
+    ax.plot(
+        x_lab,
+        pdf_lab * len(lab_df) * (lab_bins[1] - lab_bins[0]),
+        linestyle="--",
+        linewidth=2,
+        label="LAB Normal"
+    )
+
+# ===== NORMAL CURVE LINE =====
+if std_line > 0:
+    x_line = np.linspace(mu_line - 3*std_line, mu_line + 3*std_line, 400)
+    pdf_line = (1/(std_line*np.sqrt(2*np.pi))) * np.exp(-0.5*((x_line-mu_line)/std_line)**2)
+
+    ax.plot(
+        x_line,
+        pdf_line * len(line_df) * (line_bins[1] - line_bins[0]),
+        linestyle="--",
+        linewidth=2,
+        label="LINE Normal"
+    )
+stat_text = (
+    f"LAB  : μ = {mu_lab:.2f}, σ = {std_lab:.2f}\n"
+    f"LINE : μ = {mu_line:.2f}, σ = {std_line:.2f}"
+)
+
+ax.text(
+    1.02, 0.98,
+    stat_text,
+    transform=ax.transAxes,
+    ha="left",
+    va="top",
+    fontsize=10,
+    bbox=dict(facecolor="white", alpha=0.85, edgecolor="none")
+)
 
         st.pyplot(fig)
