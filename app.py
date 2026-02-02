@@ -107,7 +107,6 @@ st.sidebar.header("🧩 ANALYSIS TASK")
 task = st.sidebar.radio(
     "Select analysis task",
     [
-        "Summary (raw tables)",
         "QA Strict Spec Check (1 NG = FAIL)",
         "QA Strict + Chart"
     ],
