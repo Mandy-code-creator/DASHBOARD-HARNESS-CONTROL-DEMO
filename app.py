@@ -9,8 +9,8 @@ import matplotlib.pyplot as plt
 # BUTTON REFRESH GOOGLE SHEET
 # ================================
 if st.sidebar.button("🔄 Refresh Data"):
-    st.cache_data.clear()
-    st.rerun()
+st.cache_data.clear()
+st.rerun()
 # ================================
 # CONFIG
 # ================================
@@ -24,9 +24,9 @@ st.title("📊 Material-level Hardness & Mechanical Detail (Offline only)")
 # ================================
 @st.cache_data
 def load_data(url):
-    r = requests.get(url)
-    r.encoding = "utf-8"
-    return pd.read_csv(StringIO(r.text))
+r = requests.get(url)
+r.encoding = "utf-8"
+return pd.read_csv(StringIO(r.text))
 
 raw = load_data(DATA_URL)
 # ================================
@@ -34,30 +34,30 @@ raw = load_data(DATA_URL)
 # ================================
 metal_col = None
 for c in raw.columns:
-    if "METALLIC" in c.upper() and "COATING" in c.upper():
-        metal_col = c
-        break
+if "METALLIC" in c.upper() and "COATING" in c.upper():
+    metal_col = c
+    break
 
 if metal_col is None:
-    st.error("❌ Cannot find METALLIC COATING TYPE column in raw data")
-    st.stop()
+st.error("❌ Cannot find METALLIC COATING TYPE column in raw data")
+st.stop()
 
 raw["Metallic_Type"] = raw[metal_col]
 
 column_mapping = {
-    "PRODUCT SPECIFICATION CODE": "Product_Spec",
-    "HR STEEL GRADE": "Material",
-    "Claasify material": "Rolling_Type",
-    "TOP COATMASS": "Top_Coatmass",
-    "ORDER GAUGE": "Order_Gauge",
-    "COIL NO": "COIL_NO",
-    "QUALITY_CODE": "Quality_Code",
-    "Standard Hardness": "Std_Range_Text",
-    "HARDNESS 冶金": "Hardness_LAB",
-    "HARDNESS 鍍鋅線 C": "Hardness_LINE",
-    "TENSILE_YIELD": "YS",
-    "TENSILE_TENSILE": "TS",
-    "TENSILE_ELONG": "EL",
+"PRODUCT SPECIFICATION CODE": "Product_Spec",
+"HR STEEL GRADE": "Material",
+"Claasify material": "Rolling_Type",
+"TOP COATMASS": "Top_Coatmass",
+"ORDER GAUGE": "Order_Gauge",
+"COIL NO": "COIL_NO",
+"QUALITY_CODE": "Quality_Code",
+"Standard Hardness": "Std_Range_Text",
+"HARDNESS 冶金": "Hardness_LAB",
+"HARDNESS 鍍鋅線 C": "Hardness_LINE",
+"TENSILE_YIELD": "YS",
+"TENSILE_TENSILE": "TS",
+"TENSILE_ELONG": "EL",
 }
 
 df = raw.rename(columns={k: v for k, v in column_mapping.items() if k in raw.columns})
@@ -66,29 +66,29 @@ df = raw.rename(columns={k: v for k, v in column_mapping.items() if k in raw.col
 # REQUIRED COLUMNS CHECK
 # ================================
 required_cols = [
-    "Product_Spec", "Material", "Top_Coatmass", "Order_Gauge",
-    "COIL_NO", "Quality_Code", "Rolling_Type", 
-    "Std_Range_Text", "Hardness_LAB", "Hardness_LINE",
-    "YS", "TS", "EL", "Metallic_Type",
+"Product_Spec", "Material", "Top_Coatmass", "Order_Gauge",
+"COIL_NO", "Quality_Code", "Rolling_Type", 
+"Std_Range_Text", "Hardness_LAB", "Hardness_LINE",
+"YS", "TS", "EL", "Metallic_Type",
 
 ]
 
 missing = [c for c in required_cols if c not in df.columns]
 if missing:
-    st.error(f"❌ Missing required columns: {missing}")
-    st.stop()
+st.error(f"❌ Missing required columns: {missing}")
+st.stop()
 
 # ================================
 # SPLIT STANDARD HARDNESS
 # ================================
 def split_std_range(x):
-    if isinstance(x, str) and "~" in x:
-        try:
-            lo, hi = x.split("~")
-            return pd.Series([float(lo), float(hi)])
-        except:
-            return pd.Series([np.nan, np.nan])
-    return pd.Series([np.nan, np.nan])
+if isinstance(x, str) and "~" in x:
+    try:
+        lo, hi = x.split("~")
+        return pd.Series([float(lo), float(hi)])
+    except:
+        return pd.Series([np.nan, np.nan])
+return pd.Series([np.nan, np.nan])
 
 df[["Std_Min", "Std_Max"]] = df["Std_Range_Text"].apply(split_std_range)
 df = df.drop(columns=["Std_Range_Text"])
@@ -97,20 +97,20 @@ df = df.drop(columns=["Std_Range_Text"])
 # FORCE NUMERIC
 # ================================
 for c in ["Hardness_LAB", "Hardness_LINE", "YS", "TS", "EL"]:
-    df[c] = pd.to_numeric(df[c], errors="coerce")
+df[c] = pd.to_numeric(df[c], errors="coerce")
 
 # ================================
 # SIDEBAR – TASK
 # ================================
 st.sidebar.header("🧩 ANALYSIS TASK")
 task = st.sidebar.radio(
-    "Select analysis task",
-    [
-        "Summary (raw tables)",
-        "QA Strict Spec Check (1 NG = FAIL)",
-        "QA Strict + Chart"
-    ],
-    index=0
+"Select analysis task",
+[
+    "Summary (raw tables)",
+    "QA Strict Spec Check (1 NG = FAIL)",
+    "QA Strict + Chart"
+],
+index=0
 )
 
 # ================================
@@ -121,8 +121,8 @@ st.sidebar.header("🎛 ROLLING TYPE")
 rolling_types = sorted(df["Rolling_Type"].dropna().unique())
 
 selected_rolling = st.sidebar.radio(
-    "Select Rolling Type",
-    rolling_types
+"Select Rolling Type",
+rolling_types
 )
 
 df = df[df["Rolling_Type"] == selected_rolling]
@@ -135,8 +135,8 @@ st.sidebar.header("🎛 METALLIC COATING TYPE")
 metallic_types = sorted(df["Metallic_Type"].dropna().unique())
 
 selected_metallic = st.sidebar.radio(
-    "Select Metallic Coating Type",
-    metallic_types
+"Select Metallic Coating Type",
+metallic_types
 )
 
 df = df[df["Metallic_Type"] == selected_metallic]
@@ -157,19 +157,19 @@ df = df[df["Quality_Code"] == selected_qc]
 GROUP_COLS = ["Product_Spec", "Material", "Metallic_Type", "Top_Coatmass", "Order_Gauge"]
 
 count_df = (
-    df.groupby(GROUP_COLS)
-      .agg(N_Coils=("COIL_NO", "nunique"))
-      .reset_index()
+df.groupby(GROUP_COLS)
+  .agg(N_Coils=("COIL_NO", "nunique"))
+  .reset_index()
 )
 
 valid_conditions = (
-    count_df[count_df["N_Coils"] >= 30]
-    .sort_values("N_Coils", ascending=False)
+count_df[count_df["N_Coils"] >= 30]
+.sort_values("N_Coils", ascending=False)
 )
 
 if valid_conditions.empty:
-    st.warning("⚠️ No condition has ≥ 30 coils")
-    st.stop()
+st.warning("⚠️ No condition has ≥ 30 coils")
+st.stop()
 
 # =========================================================
 
@@ -177,150 +177,150 @@ if valid_conditions.empty:
 # =========================================================
 if task == "QA Strict Spec Check (1 NG = FAIL)":
 
-    st.subheader("🧪 QA Strict Spec Check – Coil level")
-    st.caption("If ANY coil is out of spec → FAIL")
+st.subheader("🧪 QA Strict Spec Check – Coil level")
+st.caption("If ANY coil is out of spec → FAIL")
 
-    for _, cond in valid_conditions.iterrows():
+for _, cond in valid_conditions.iterrows():
 
-        spec, mat, coat, gauge, n = (
-            cond["Product_Spec"],
-            cond["Material"],
-            cond["Top_Coatmass"],
-            cond["Order_Gauge"],
-            int(cond["N_Coils"])
-        )
+    spec, mat, coat, gauge, n = (
+        cond["Product_Spec"],
+        cond["Material"],
+        cond["Top_Coatmass"],
+        cond["Order_Gauge"],
+        int(cond["N_Coils"])
+    )
 
-        sub = df[
-            (df["Product_Spec"] == spec) &
-            (df["Material"] == mat) &
-            (df["Top_Coatmass"] == coat) &
-            (df["Order_Gauge"] == gauge)
-        ].copy()
+    sub = df[
+        (df["Product_Spec"] == spec) &
+        (df["Material"] == mat) &
+        (df["Top_Coatmass"] == coat) &
+        (df["Order_Gauge"] == gauge)
+    ].copy()
 sub = sub.sort_values("COIL_NO").reset_index(drop=True)
 
-        lo = sub["Std_Min"].iloc[0]
-        hi = sub["Std_Max"].iloc[0]
+    lo = sub["Std_Min"].iloc[0]
+    hi = sub["Std_Max"].iloc[0]
 
-        # ===== NG LOGIC =====
-        sub["NG_LAB"]  = (sub["Hardness_LAB"]  < lo) | (sub["Hardness_LAB"]  > hi)
-        sub["NG_LINE"] = (sub["Hardness_LINE"] < lo) | (sub["Hardness_LINE"] > hi)
+    # ===== NG LOGIC =====
+    sub["NG_LAB"]  = (sub["Hardness_LAB"]  < lo) | (sub["Hardness_LAB"]  > hi)
+    sub["NG_LINE"] = (sub["Hardness_LINE"] < lo) | (sub["Hardness_LINE"] > hi)
 
-        sub["COIL_NG"] = sub["NG_LAB"] | sub["NG_LINE"]
+    sub["COIL_NG"] = sub["NG_LAB"] | sub["NG_LINE"]
 
-        # ===== DELTA & OUT OF LIMIT =====
-        sub["Δ_LINE_LAB"] = sub["Hardness_LINE"] - sub["Hardness_LAB"]
+    # ===== DELTA & OUT OF LIMIT =====
+    sub["Δ_LINE_LAB"] = sub["Hardness_LINE"] - sub["Hardness_LAB"]
 
-        sub["OOL_LAB"] = np.where(
-            sub["Hardness_LAB"] > hi, sub["Hardness_LAB"] - hi,
-            np.where(sub["Hardness_LAB"] < lo, lo - sub["Hardness_LAB"], 0)
-        )
+    sub["OOL_LAB"] = np.where(
+        sub["Hardness_LAB"] > hi, sub["Hardness_LAB"] - hi,
+        np.where(sub["Hardness_LAB"] < lo, lo - sub["Hardness_LAB"], 0)
+    )
 
-        sub["OOL_LINE"] = np.where(
-            sub["Hardness_LINE"] > hi, sub["Hardness_LINE"] - hi,
-            np.where(sub["Hardness_LINE"] < lo, lo - sub["Hardness_LINE"], 0)
-        )
+    sub["OOL_LINE"] = np.where(
+        sub["Hardness_LINE"] > hi, sub["Hardness_LINE"] - hi,
+        np.where(sub["Hardness_LINE"] < lo, lo - sub["Hardness_LINE"], 0)
+    )
 
-        n_out = sub[sub["COIL_NG"]]["COIL_NO"].nunique()
-        qa_result = "FAIL" if n_out > 0 else "PASS"
+    n_out = sub[sub["COIL_NG"]]["COIL_NO"].nunique()
+    qa_result = "FAIL" if n_out > 0 else "PASS"
 
-        st.markdown(
-            f"## 🧱 Product Spec: `{spec}`  \n"
-            f"**Material:** {mat} | **Coatmass:** {coat} | **Gauge:** {gauge}  \n"
-            f"➡️ **n = {n} coils**  \n"
-            f"❌ **n_out = {n_out} coils out of spec**  \n"
-            f"🧪 **QA Result:** `{qa_result}`"
-        )
+    st.markdown(
+        f"## 🧱 Product Spec: `{spec}`  \n"
+        f"**Material:** {mat} | **Coatmass:** {coat} | **Gauge:** {gauge}  \n"
+        f"➡️ **n = {n} coils**  \n"
+        f"❌ **n_out = {n_out} coils out of spec**  \n"
+        f"🧪 **QA Result:** `{qa_result}`"
+    )
 
-        show_cols = [
-            "COIL_NO",
-            "Std_Min", "Std_Max",
-            "Hardness_LAB", "Hardness_LINE",
-            "Δ_LINE_LAB",
-            "OOL_LAB", "OOL_LINE",
-            "NG_LAB", "NG_LINE",
-            "YS", "TS", "EL"
-        ]
+    show_cols = [
+        "COIL_NO",
+        "Std_Min", "Std_Max",
+        "Hardness_LAB", "Hardness_LINE",
+        "Δ_LINE_LAB",
+        "OOL_LAB", "OOL_LINE",
+        "NG_LAB", "NG_LINE",
+        "YS", "TS", "EL"
+    ]
 
-        st.dataframe(
-            sub[show_cols].sort_values("COIL_NO"),
-            use_container_width=True
-        )
+    st.dataframe(
+        sub[show_cols].sort_values("COIL_NO"),
+        use_container_width=True
+    )
 if task == "QA Strict + Chart":
 
-    st.subheader("📊 QA Strict Spec Check with Visualization")
+st.subheader("📊 QA Strict Spec Check with Visualization")
 
-    for _, cond in valid_conditions.iterrows():
+for _, cond in valid_conditions.iterrows():
 
-        spec, mat, coat, gauge, n = (
-            cond["Product_Spec"],
-            cond["Material"],
-            cond["Top_Coatmass"],
-            cond["Order_Gauge"],
-            int(cond["N_Coils"])
-        )
+    spec, mat, coat, gauge, n = (
+        cond["Product_Spec"],
+        cond["Material"],
+        cond["Top_Coatmass"],
+        cond["Order_Gauge"],
+        int(cond["N_Coils"])
+    )
 
-        # ===== FILTER DATA =====
-        sub = df[
-            (df["Product_Spec"] == spec) &
-            (df["Material"] == mat) &
-            (df["Top_Coatmass"] == coat) &
-            (df["Order_Gauge"] == gauge)
-        ].copy()
+    # ===== FILTER DATA =====
+    sub = df[
+        (df["Product_Spec"] == spec) &
+        (df["Material"] == mat) &
+        (df["Top_Coatmass"] == coat) &
+        (df["Order_Gauge"] == gauge)
+    ].copy()
 
-        # ===== SORT BY COIL_NO (RẤT QUAN TRỌNG) =====
-        sub = sub.sort_values("COIL_NO").reset_index(drop=True)
+    # ===== SORT BY COIL_NO (RẤT QUAN TRỌNG) =====
+    sub = sub.sort_values("COIL_NO").reset_index(drop=True)
 
-        lo = sub["Std_Min"].iloc[0]
-        hi = sub["Std_Max"].iloc[0]
+    lo = sub["Std_Min"].iloc[0]
+    hi = sub["Std_Max"].iloc[0]
 
-        # ===== QA STRICT LOGIC =====
-        sub["NG_LAB"]  = (sub["Hardness_LAB"]  < lo) | (sub["Hardness_LAB"]  > hi)
-        sub["NG_LINE"] = (sub["Hardness_LINE"] < lo) | (sub["Hardness_LINE"] > hi)
-        sub["COIL_NG"] = sub["NG_LAB"] | sub["NG_LINE"]
+    # ===== QA STRICT LOGIC =====
+    sub["NG_LAB"]  = (sub["Hardness_LAB"]  < lo) | (sub["Hardness_LAB"]  > hi)
+    sub["NG_LINE"] = (sub["Hardness_LINE"] < lo) | (sub["Hardness_LINE"] > hi)
+    sub["COIL_NG"] = sub["NG_LAB"] | sub["NG_LINE"]
 
-        n_out = sub[sub["COIL_NG"]]["COIL_NO"].nunique()
-        qa_result = "FAIL" if n_out > 0 else "PASS"
+    n_out = sub[sub["COIL_NG"]]["COIL_NO"].nunique()
+    qa_result = "FAIL" if n_out > 0 else "PASS"
 
-        # ===== HEADER =====
-        st.markdown(
-            f"## 🧱 Product Spec: `{spec}`  \n"
-            f"**Material:** {mat} | **Coatmass:** {coat} | **Gauge:** {gauge}  \n"
-            f"➡️ **n = {n} coils**  \n"
-            f"❌ **n_out = {n_out} coils out of spec**  \n"
-            f"🧪 **QA Result:** `{qa_result}`"
-        )
+    # ===== HEADER =====
+    st.markdown(
+        f"## 🧱 Product Spec: `{spec}`  \n"
+        f"**Material:** {mat} | **Coatmass:** {coat} | **Gauge:** {gauge}  \n"
+        f"➡️ **n = {n} coils**  \n"
+        f"❌ **n_out = {n_out} coils out of spec**  \n"
+        f"🧪 **QA Result:** `{qa_result}`"
+    )
 
-        # ===== TABLE =====
-        st.dataframe(
-            sub[
-                [
-                    "COIL_NO",
-                    "Std_Min", "Std_Max",
-                    "Hardness_LAB", "Hardness_LINE",
-                    "NG_LAB", "NG_LINE"
-                ]
-            ],
-            use_container_width=True
-        )
+    # ===== TABLE =====
+    st.dataframe(
+        sub[
+            [
+                "COIL_NO",
+                "Std_Min", "Std_Max",
+                "Hardness_LAB", "Hardness_LINE",
+                "NG_LAB", "NG_LINE"
+            ]
+        ],
+        use_container_width=True
+    )
 
-        # ===== CHART =====
-        fig, ax = plt.subplots(figsize=(6, 3))
+    # ===== CHART =====
+    fig, ax = plt.subplots(figsize=(6, 3))
 
-        ok = sub[~sub["COIL_NG"]]
-        ng = sub[sub["COIL_NG"]]
+    ok = sub[~sub["COIL_NG"]]
+    ng = sub[sub["COIL_NG"]]
 
-        x_ok = ok.index + 1
-        x_ng = ng.index + 1
+    x_ok = ok.index + 1
+    x_ng = ng.index + 1
 
-        ax.plot(x_ok, ok["Hardness_LINE"], marker="o", label="OK")
-        ax.plot(x_ng, ng["Hardness_LINE"], marker="o", linestyle="", label="NG")
+    ax.plot(x_ok, ok["Hardness_LINE"], marker="o", label="OK")
+    ax.plot(x_ng, ng["Hardness_LINE"], marker="o", linestyle="", label="NG")
 
-        ax.axhline(lo, linestyle="--", label="LSL")
-        ax.axhline(hi, linestyle="--", label="USL")
+    ax.axhline(lo, linestyle="--", label="LSL")
+    ax.axhline(hi, linestyle="--", label="USL")
 
-        ax.set_xlabel("Coil Order (sorted by COIL_NO)")
-        ax.set_ylabel("Hardness LINE (HRB)")
-        ax.set_title(f"{spec} | {qa_result}")
-        ax.legend()
+    ax.set_xlabel("Coil Order (sorted by COIL_NO)")
+    ax.set_ylabel("Hardness LINE (HRB)")
+    ax.set_title(f"{spec} | {qa_result}")
+    ax.legend()
 
-        st.pyplot(fig)
+    st.pyplot(fig)
