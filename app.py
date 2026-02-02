@@ -252,7 +252,81 @@ for _, cond in valid_conditions.iterrows():
     # VIEW 3 — DISTRIBUTION
     # ================================
     elif view_mode == "📊 Distribution":
-    
+        # ===== POWER BI CARD HEADER =====
+    st.markdown(
+        f"""
+        <div style="
+            border:1px solid #d0d0d0;
+            border-radius:8px;
+            padding:12px;
+            margin-bottom:16px;
+            background-color:#ffffff;
+        ">
+            <h4 style="margin:0; color:#333;">
+                📊 {spec} — Hardness Distribution
+            </h4>
+        """,
+        unsafe_allow_html=True
+    )
+    # ===== FILTER DATA =====
+    lab_df  = sub[sub["Hardness_LAB"]  > 0]
+    line_df = sub[sub["Hardness_LINE"] > 0]
+
+    # ===== STAT =====
+    mu_lab, std_lab   = lab_df["Hardness_LAB"].mean(),  lab_df["Hardness_LAB"].std()
+    mu_line, std_line = line_df["Hardness_LINE"].mean(), line_df["Hardness_LINE"].std()
+
+    fig, ax = plt.subplots(figsize=(5.5, 3.5))
+
+    # ===== HIST =====
+    lab_counts, lab_bins, _ = ax.hist(
+        lab_df["Hardness_LAB"], bins=10, alpha=0.5,
+        label="LAB", edgecolor="black"
+    )
+
+    line_counts, line_bins, _ = ax.hist(
+        line_df["Hardness_LINE"], bins=10, alpha=0.5,
+        label="LINE", edgecolor="black"
+    )
+
+    # ===== NORMAL CURVE ±3σ =====
+    if std_lab > 0:
+        x = np.linspace(mu_lab - 3*std_lab, mu_lab + 3*std_lab, 400)
+        pdf = (1/(std_lab*np.sqrt(2*np.pi))) * np.exp(-0.5*((x-mu_lab)/std_lab)**2)
+        ax.plot(
+            x, pdf * len(lab_df) * (lab_bins[1]-lab_bins[0]),
+            "--", lw=2, label="LAB Normal"
+        )
+
+    if std_line > 0:
+        x = np.linspace(mu_line - 3*std_line, mu_line + 3*std_line, 400)
+        pdf = (1/(std_line*np.sqrt(2*np.pi))) * np.exp(-0.5*((x-mu_line)/std_line)**2)
+        ax.plot(
+            x, pdf * len(line_df) * (line_bins[1]-line_bins[0]),
+            "--", lw=2, label="LINE Normal"
+        )
+
+    # ===== SPEC =====
+    ax.axvline(lo, linestyle="--", label="LSL")
+    ax.axvline(hi, linestyle="--", label="USL")
+
+    # ===== STAT BOX =====
+    ax.text(
+        1.02, 0.98,
+        f"LAB  μ={mu_lab:.2f} σ={std_lab:.2f}\n"
+        f"LINE μ={mu_line:.2f} σ={std_line:.2f}",
+        transform=ax.transAxes,
+        ha="left", va="top",
+        bbox=dict(facecolor="white", alpha=0.85, edgecolor="none")
+    )
+
+    ax.set_xlabel("HRB")
+    ax.set_ylabel("Count")
+    ax.grid(alpha=0.3)
+    ax.legend(bbox_to_anchor=(1.02,0.5), loc="center left", frameon=False)
+
+    st.pyplot(fig)
+
         # ===== FILTER DATA =====
         lab_df  = sub[sub["Hardness_LAB"]  > 0]
         line_df = sub[sub["Hardness_LINE"] > 0]
@@ -342,4 +416,32 @@ for _, cond in valid_conditions.iterrows():
         ax.grid(alpha=0.3)
     
         st.pyplot(fig)
+    import io
+
+    c1, c2 = st.columns(2)
+
+    # ===== PNG =====
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png", dpi=150, bbox_inches="tight")
+    buf.seek(0)
+
+    with c1:
+        st.download_button(
+            "⬇️ Download PNG",
+            buf,
+            file_name=f"{spec}_distribution.png",
+            mime="image/png"
+        )
+
+    # ===== CSV =====
+    export_df = sub[["COIL_NO", "Hardness_LAB", "Hardness_LINE"]]
+
+    with c2:
+        st.download_button(
+            "⬇️ Download CSV",
+            export_df.to_csv(index=False),
+            file_name=f"{spec}_distribution.csv",
+            mime="text/csv"
+        )
+    st.markdown("</div>", unsafe_allow_html=True)
 
