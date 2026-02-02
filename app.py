@@ -34,6 +34,7 @@ raw.columns = (
         .str.replace("\n", " ", regex=False)
         .str.strip()
 )
+st.write("COLUMNS AFTER CLEAN:", raw.columns.tolist())
 
 # ================================
 # COLUMN MAPPING
