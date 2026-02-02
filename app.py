@@ -19,7 +19,7 @@ import matplotlib.pyplot as plt
 # PAGE CONFIG
 # ================================
 st.set_page_config(page_title="Material-level Hardness Detail", layout="wide")
-st.title("📊 Material-level Hardness & Mechanical Detail")
+st.title("📊 Material-level Hardness & Mechanical Detail (Offline only)")
 
 # ================================
 # REFRESH BUTTON
