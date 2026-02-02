@@ -3,7 +3,12 @@ import pandas as pd
 import numpy as np
 import requests
 from io import StringIO
-
+# ================================
+# BUTTON REFRESH GOOGLE SHEET
+# ================================
+if st.sidebar.button("🔄 Cập nhật dữ liệu Google Sheet"):
+    st.cache_data.clear()
+    st.rerun()
 # ================================
 # CONFIG
 # ================================
