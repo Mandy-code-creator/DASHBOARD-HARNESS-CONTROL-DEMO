@@ -39,6 +39,8 @@ column_mapping = {
     "TENSILE_YIELD": "YS",
     "TENSILE_TENSILE": "TS",
     "TENSILE_ELONG": "EL",
+    "METALLIC COATING TYPE": "Metallic_Type",
+
 }
 
 df = raw.rename(columns={k: v for k, v in column_mapping.items() if k in raw.columns})
@@ -50,7 +52,8 @@ required_cols = [
     "Product_Spec", "Material", "Top_Coatmass", "Order_Gauge",
     "COIL_NO", "Quality_Code",
     "Std_Range_Text", "Hardness_LAB", "Hardness_LINE",
-    "YS", "TS", "EL"
+    "YS", "TS", "EL", "Metallic_Type",
+
 ]
 
 missing = [c for c in required_cols if c not in df.columns]
@@ -99,11 +102,32 @@ st.sidebar.header("🎛 QUALITY CODE")
 quality_codes = sorted(df["Quality_Code"].dropna().unique())
 selected_qc = st.sidebar.radio("Select Quality Code", quality_codes)
 df = df[df["Quality_Code"] == selected_qc]
+# ================================
+# METALLIC COATING TYPE FILTER
+# ================================
+st.sidebar.header("🧲 METALLIC COATING TYPE")
+
+metal_types = (
+    df["Metallic_Type"]
+    .dropna()
+    .astype(str)
+    .unique()
+)
+
+metal_types = sorted(metal_types)
+
+selected_metal = st.sidebar.multiselect(
+    "Select Metallic Coating Type",
+    metal_types,
+    default=metal_types
+)
+
+df = df[df["Metallic_Type"].isin(selected_metal)]
 
 # ================================
 # GROUP + COUNT (>=30 coils)
 # ================================
-GROUP_COLS = ["Product_Spec", "Material", "Top_Coatmass", "Order_Gauge"]
+GROUP_COLS = ["Product_Spec", "Material", "Metallic_Type", "Top_Coatmass", "Order_Gauge"]
 
 count_df = (
     df.groupby(GROUP_COLS)
