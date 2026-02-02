@@ -256,20 +256,27 @@ if task == "QA Strict + Chart":
             use_container_width=True
         )
 
-        fig, ax = plt.subplots(figsize=(6, 3))
+        # ===== CHART =====
+fig, ax = plt.subplots(figsize=(6, 3))
 
-        ok = sub[~sub["COIL_NG"]]
-        ng = sub[sub["COIL_NG"]]
+# ❗ CHỈ DÙNG DATA HARDNESS > 0 ĐỂ VẼ
+plot_df = sub[sub["Hardness_LINE"] > 0]
 
-        ax.plot(ok.index + 1, ok["Hardness_LINE"], marker="o", label="OK")
-        ax.plot(ng.index + 1, ng["Hardness_LINE"], marker="o", linestyle="", label="NG")
+ok = plot_df[~plot_df["COIL_NG"]]
+ng = plot_df[plot_df["COIL_NG"]]
 
-        ax.axhline(lo, linestyle="--", label="LSL")
-        ax.axhline(hi, linestyle="--", label="USL")
+x_ok = ok.index + 1
+x_ng = ng.index + 1
 
-        ax.set_xlabel("Coil Order (sorted by COIL_NO)")
-        ax.set_ylabel("Hardness LINE (HRB)")
-        ax.set_title(f"{spec} | {qa_result}")
-        ax.legend()
+ax.plot(x_ok, ok["Hardness_LINE"], marker="o", label="OK")
+ax.plot(x_ng, ng["Hardness_LINE"], marker="o", linestyle="", label="NG")
 
-        st.pyplot(fig)
+ax.axhline(lo, linestyle="--", label="LSL")
+ax.axhline(hi, linestyle="--", label="USL")
+
+ax.set_xlabel("Coil Order (sorted by COIL_NO)")
+ax.set_ylabel("Hardness LINE (HRB)")
+ax.set_title(f"{spec} | {qa_result}")
+ax.legend()
+
+st.pyplot(fig)
