@@ -3,6 +3,8 @@ import pandas as pd
 import numpy as np
 import requests
 from io import StringIO
+import matplotlib.pyplot as plt
+
 # ================================
 # BUTTON REFRESH GOOGLE SHEET
 # ================================
@@ -105,10 +107,12 @@ task = st.sidebar.radio(
     "Select analysis task",
     [
         "Summary (raw tables)",
-        "QA Strict Spec Check (1 NG = FAIL)"
+        "QA Strict Spec Check (1 NG = FAIL)",
+        "QA Strict + Chart"
     ],
     index=0
 )
+
 # ================================
 # ROLLING TYPE FILTER (FROM SHEET)
 # ================================
@@ -277,3 +281,74 @@ if task == "QA Strict Spec Check (1 NG = FAIL)":
             sub[show_cols].sort_values("COIL_NO"),
             use_container_width=True
         )
+if task == "QA Strict + Chart":
+
+    st.subheader("📊 QA Strict Spec Check with Visualization")
+
+    for _, cond in valid_conditions.iterrows():
+
+        spec, mat, coat, gauge, n = (
+            cond["Product_Spec"],
+            cond["Material"],
+            cond["Top_Coatmass"],
+            cond["Order_Gauge"],
+            int(cond["N_Coils"])
+        )
+
+        sub = df[
+            (df["Product_Spec"] == spec) &
+            (df["Material"] == mat) &
+            (df["Top_Coatmass"] == coat) &
+            (df["Order_Gauge"] == gauge)
+        ].copy()
+
+        lo = sub["Std_Min"].iloc[0]
+        hi = sub["Std_Max"].iloc[0]
+
+        # ===== QA STRICT LOGIC (GIỐNG 100%) =====
+        sub["NG_LAB"]  = (sub["Hardness_LAB"]  < lo) | (sub["Hardness_LAB"]  > hi)
+        sub["NG_LINE"] = (sub["Hardness_LINE"] < lo) | (sub["Hardness_LINE"] > hi)
+        sub["COIL_NG"] = sub["NG_LAB"] | sub["NG_LINE"]
+
+        n_out = sub[sub["COIL_NG"]]["COIL_NO"].nunique()
+        qa_result = "FAIL" if n_out > 0 else "PASS"
+
+        # ===== HIỂN THỊ GIỐNG QA STRICT =====
+        st.markdown(
+            f"## 🧱 Product Spec: `{spec}`  \n"
+            f"**Material:** {mat} | **Coatmass:** {coat} | **Gauge:** {gauge}  \n"
+            f"➡️ **n = {n} coils**  \n"
+            f"❌ **n_out = {n_out} coils out of spec**  \n"
+            f"🧪 **QA Result:** `{qa_result}`"
+        )
+
+        st.dataframe(
+            sub[
+                [
+                    "COIL_NO",
+                    "Std_Min", "Std_Max",
+                    "Hardness_LAB", "Hardness_LINE",
+                    "NG_LAB", "NG_LINE"
+                ]
+            ].sort_values("COIL_NO"),
+            use_container_width=True
+        )
+
+        # ===== BIỂU ĐỒ (CHỈ THÊM, KHÔNG ĐỔI FORMAT) =====
+        fig, ax = plt.subplots(figsize=(6, 3))
+
+        ok = sub[~sub["COIL_NG"]]
+        ng = sub[sub["COIL_NG"]]
+
+        ax.plot(ok.index + 1, ok["Hardness_LINE"], marker="o", label="OK")
+        ax.plot(ng.index + 1, ng["Hardness_LINE"], marker="o", linestyle="", label="NG")
+
+        ax.axhline(lo, linestyle="--", label="LSL")
+        ax.axhline(hi, linestyle="--", label="USL")
+
+        ax.set_xlabel("Coil Order")
+        ax.set_ylabel("Hardness LINE (HRB)")
+        ax.set_title(f"{spec} | {qa_result}")
+        ax.legend()
+
+        st.pyplot(fig)
