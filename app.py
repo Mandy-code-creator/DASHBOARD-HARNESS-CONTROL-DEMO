@@ -188,29 +188,37 @@ for _, cond in valid_conditions.iterrows():
 
     # ================================
     # VIEW 1 — TABLE
-# ================================
+# =========================
 # VIEW 1 — DATA TABLE
-# ================================
-if view_mode == "📋 Data":
+# =========================
+if view_mode == "📋 Data Table":
 
-    display_cols = [
+    show_cols = [
         "COIL_NO",
         "Std_Min", "Std_Max",
+
+        # ⬇️ HARDNESS
         "Hardness_LAB", "Hardness_LINE",
         "Δ_LINE_LAB",
         "OOL_LAB", "OOL_LINE",
         "NG_LAB", "NG_LINE",
-        "YS", "TS", "El"
+
+        # ⬇️ MECHANICAL
+        "YS", "TS", "EL",
+
+        # ⬇️ STANDARD MECHANICAL (MỚI)
+        "Standard_YS_Min", "Standard_YS_Max",
+        "Standard_TS_Min", "Standard_TS_Max",
+        "Standard_EL_Min", "Standard_EL_Max",
     ]
 
-    table_df = sub[display_cols].copy()
+    # chỉ hiển thị cột tồn tại
+    show_cols = [c for c in show_cols if c in sub.columns]
 
     st.dataframe(
-        table_df,
-        use_container_width=True,
-        hide_index=True
+        sub[show_cols].sort_values("COIL_NO"),
+        use_container_width=True
     )
-
 
     # ================================
     # VIEW 2 — TREND (LAB / LINE)
