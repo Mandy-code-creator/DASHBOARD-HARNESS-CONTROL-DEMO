@@ -1,3 +1,13 @@
+# ================================
+# FULL STREAMLIT APP – LOGIC CONFIRMED
+# - GIỮ NGUYÊN LOGIC QA STRICT (1 NG = FAIL)
+# - TÁCH BIỂU ĐỒ LAB / LINE
+# - KHÔNG VẼ HARDNESS = 0
+# - Y TICK STEP = 2.5 HRB
+# - LEGEND Ở NGOÀI BIỂU ĐỒ
+# - VIEW MODE: TABLE → TREND → DISTRIBUTION
+# ================================
+
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -9,10 +19,10 @@ import matplotlib.pyplot as plt
 # PAGE CONFIG
 # ================================
 st.set_page_config(page_title="Material-level Hardness Detail", layout="wide")
-st.title("📊 Material-level Hardness & Mechanical Detail (Offline only)")
+st.title("📊 Material-level Hardness & Mechanical Detail")
 
 # ================================
-# BUTTON REFRESH
+# REFRESH BUTTON
 # ================================
 if st.sidebar.button("🔄 Refresh Data"):
     st.cache_data.clear()
@@ -68,7 +78,21 @@ column_mapping = {
 df = raw.rename(columns={k: v for k, v in column_mapping.items() if k in raw.columns})
 
 # ================================
-# SPLIT STANDARD HARDNESS
+# CHECK REQUIRED COLUMNS
+# ================================
+required_cols = [
+    "Product_Spec","Material","Rolling_Type","Metallic_Type",
+    "Top_Coatmass","Order_Gauge","COIL_NO","Quality_Code",
+    "Std_Range_Text","Hardness_LAB","Hardness_LINE","YS","TS","EL"
+]
+
+missing = [c for c in required_cols if c not in df.columns]
+if missing:
+    st.error(f"❌ Missing columns: {missing}")
+    st.stop()
+
+# ================================
+# SPLIT STANDARD RANGE
 # ================================
 def split_std(x):
     if isinstance(x, str) and "~" in x:
@@ -76,143 +100,144 @@ def split_std(x):
             lo, hi = x.split("~")
             return pd.Series([float(lo), float(hi)])
         except:
-            pass
+            return pd.Series([np.nan, np.nan])
     return pd.Series([np.nan, np.nan])
 
-df[["Std_Min", "Std_Max"]] = df["Std_Range_Text"].apply(split_std)
+df[["Std_Min","Std_Max"]] = df["Std_Range_Text"].apply(split_std)
 df.drop(columns=["Std_Range_Text"], inplace=True)
 
 # ================================
 # FORCE NUMERIC
 # ================================
-for c in ["Hardness_LAB", "Hardness_LINE", "YS", "TS", "EL"]:
+for c in ["Hardness_LAB","Hardness_LINE","YS","TS","EL"]:
     df[c] = pd.to_numeric(df[c], errors="coerce")
 
 # ================================
 # SIDEBAR FILTERS
 # ================================
-st.sidebar.header("🧩 TASK")
-task = st.sidebar.radio(
-    "Select Task",
-    ["Summary (raw tables)", "QA Strict Spec Check (1 NG = FAIL)"]
-)
-
 st.sidebar.header("🎛 FILTERS")
 
-rolling = st.sidebar.radio(
-    "Rolling Type",
-    sorted(df["Rolling_Type"].dropna().unique())
-)
+rolling = st.sidebar.radio("Rolling Type", sorted(df["Rolling_Type"].dropna().unique()))
 df = df[df["Rolling_Type"] == rolling]
 
-metallic = st.sidebar.radio(
-    "Metallic Coating",
-    sorted(df["Metallic_Type"].dropna().unique())
-)
-df = df[df["Metallic_Type"] == metallic]
+metal = st.sidebar.radio("Metallic Coating", sorted(df["Metallic_Type"].dropna().unique()))
+df = df[df["Metallic_Type"] == metal]
 
-qc = st.sidebar.radio(
-    "Quality Code",
-    sorted(df["Quality_Code"].dropna().unique())
-)
+qc = st.sidebar.radio("Quality Code", sorted(df["Quality_Code"].dropna().unique()))
 df = df[df["Quality_Code"] == qc]
 
 # ================================
-# GROUP VALID CONDITIONS
+# VIEW MODE
 # ================================
-GROUP_COLS = ["Product_Spec", "Material", "Metallic_Type", "Top_Coatmass", "Order_Gauge"]
-
-valid_conditions = (
-    df.groupby(GROUP_COLS)
-      .agg(N=("COIL_NO", "nunique"))
-      .reset_index()
-      .query("N >= 30")
+view_mode = st.sidebar.radio(
+    "📊 View Mode",
+    ["📋 Data Table","📈 Trend (LAB / LINE)","📊 Distribution"],
+    index=0
 )
 
+# ================================
+# GROUP CONDITION (≥30 COILS)
+# ================================
+GROUP_COLS = ["Product_Spec","Material","Metallic_Type","Top_Coatmass","Order_Gauge"]
+
+count_df = (
+    df.groupby(GROUP_COLS)
+      .agg(N_Coils=("COIL_NO","nunique"))
+      .reset_index()
+)
+
+valid_conditions = count_df[count_df["N_Coils"] >= 30]
+
 if valid_conditions.empty:
-    st.warning("⚠️ No condition ≥ 30 coils")
+    st.warning("⚠️ No condition with ≥ 30 coils")
     st.stop()
 
-# =========================================================
-# QA STRICT SPEC CHECK
-# =========================================================
-if task == "QA Strict Spec Check (1 NG = FAIL)":
+# ================================
+# MAIN LOOP
+# ================================
+for _, cond in valid_conditions.iterrows():
 
-    for _, cond in valid_conditions.iterrows():
+    spec, mat, coat, gauge, n = (
+        cond["Product_Spec"], cond["Material"], cond["Top_Coatmass"],
+        cond["Order_Gauge"], int(cond["N_Coils"])
+    )
 
-        spec, mat, coat, gauge, n = (
-            cond["Product_Spec"],
-            cond["Material"],
-            cond["Top_Coatmass"],
-            cond["Order_Gauge"],
-            int(cond["N"])
-        )
+    sub = df[
+        (df["Product_Spec"] == spec) &
+        (df["Material"] == mat) &
+        (df["Top_Coatmass"] == coat) &
+        (df["Order_Gauge"] == gauge)
+    ].copy().sort_values("COIL_NO").reset_index(drop=True)
 
-        sub = df[
-            (df["Product_Spec"] == spec) &
-            (df["Material"] == mat) &
-            (df["Top_Coatmass"] == coat) &
-            (df["Order_Gauge"] == gauge)
-        ].sort_values("COIL_NO").reset_index(drop=True)
+    lo, hi = sub[["Std_Min","Std_Max"]].iloc[0]
 
-        lo, hi = sub["Std_Min"].iloc[0], sub["Std_Max"].iloc[0]
+    # ===== QA STRICT LOGIC (KHÔNG ĐỔI) =====
+    sub["NG_LAB"]  = (sub["Hardness_LAB"]  < lo) | (sub["Hardness_LAB"]  > hi)
+    sub["NG_LINE"] = (sub["Hardness_LINE"] < lo) | (sub["Hardness_LINE"] > hi)
+    sub["COIL_NG"] = sub["NG_LAB"] | sub["NG_LINE"]
 
-        # ===== QA LOGIC (UNCHANGED) =====
-        sub["NG_LAB"]  = (sub["Hardness_LAB"]  < lo) | (sub["Hardness_LAB"]  > hi)
-        sub["NG_LINE"] = (sub["Hardness_LINE"] < lo) | (sub["Hardness_LINE"] > hi)
-        sub["COIL_NG"] = sub["NG_LAB"] | sub["NG_LINE"]
+    n_out = sub[sub["COIL_NG"]]["COIL_NO"].nunique()
+    qa_result = "FAIL" if n_out > 0 else "PASS"
 
-        n_out = sub[sub["COIL_NG"]]["COIL_NO"].nunique()
-        qa_result = "FAIL" if n_out > 0 else "PASS"
+    st.markdown(
+        f"## 🧱 `{spec}`  \n"
+        f"Material: **{mat}** | Coatmass: **{coat}** | Gauge: **{gauge}**  \n"
+        f"➡️ n = **{n} coils** | ❌ Out = **{n_out}** | 🧪 **{qa_result}**"
+    )
 
-        st.markdown(
-            f"## 🧱 `{spec}`  \n"
-            f"Material: **{mat}** | Coat: **{coat}** | Gauge: **{gauge}**  \n"
-            f"n = **{n}** | ❌ NG = **{n_out}** | 🧪 **{qa_result}**"
-        )
-
-        k1, k2, k3 = st.columns(3)
-        k1.metric("Total Coils", n)
-        k2.metric("Out of Spec", n_out)
-        k3.metric("QA Result", qa_result)
-
+    # ================================
+    # VIEW 1 — TABLE
+    # ================================
+    if view_mode == "📋 Data Table":
         st.dataframe(sub, use_container_width=True)
 
-        # =========================
-        # PREPARE CHART DATA
-        # =========================
-        sub["X"] = sub.index + 1
+    # ================================
+    # VIEW 2 — TREND (LAB / LINE)
+    # ================================
+    if view_mode == "📈 Trend (LAB / LINE)":
 
+        sub["X"] = sub.index + 1
         lab_df  = sub[sub["Hardness_LAB"]  > 0]
         line_df = sub[sub["Hardness_LINE"] > 0]
 
         y_min = np.floor(min(lo, lab_df["Hardness_LAB"].min(), line_df["Hardness_LINE"].min()))
         y_max = np.ceil (max(hi, lab_df["Hardness_LAB"].max(), line_df["Hardness_LINE"].max()))
 
-        # =========================
-        # CHART — LAB
-        # =========================
-        fig, ax = plt.subplots(figsize=(9, 3))
-        ax.plot(lab_df["X"], lab_df["Hardness_LAB"], marker="o")
-        ax.axhline(lo, linestyle="--", label="LSL")
-        ax.axhline(hi, linestyle="--", label="USL")
-        ax.set_title(f"{spec} | Hardness LAB")
-        ax.set_ylim(y_min, y_max)
-        ax.set_yticks(np.arange(y_min, y_max + 0.01, 2.5))
-        ax.legend(bbox_to_anchor=(1.02, 0.5), loc="center left", frameon=False)
-        ax.grid(alpha=0.3)
-        st.pyplot(fig)
+        c1, c2 = st.columns(2)
 
-        # =========================
-        # CHART — LINE
-        # =========================
-        fig, ax = plt.subplots(figsize=(9, 3))
-        ax.plot(line_df["X"], line_df["Hardness_LINE"], marker="o")
-        ax.axhline(lo, linestyle="--", label="LSL")
-        ax.axhline(hi, linestyle="--", label="USL")
-        ax.set_title(f"{spec} | Hardness LINE")
-        ax.set_ylim(y_min, y_max)
-        ax.set_yticks(np.arange(y_min, y_max + 0.01, 2.5))
-        ax.legend(bbox_to_anchor=(1.02, 0.5), loc="center left", frameon=False)
-        ax.grid(alpha=0.3)
+        with c1:
+            fig, ax = plt.subplots(figsize=(6,3))
+            ax.plot(lab_df["X"], lab_df["Hardness_LAB"], marker="o", label="LAB")
+            ax.axhline(lo, linestyle="--", label="LSL")
+            ax.axhline(hi, linestyle="--", label="USL")
+            ax.set_title("Hardness LAB")
+            ax.set_ylim(y_min, y_max)
+            ax.set_yticks(np.arange(y_min, y_max+0.01, 2.5))
+            ax.grid(alpha=0.3)
+            ax.legend(bbox_to_anchor=(1.02,0.5), loc="center left", frameon=False)
+            st.pyplot(fig)
+
+        with c2:
+            fig, ax = plt.subplots(figsize=(6,3))
+            ax.plot(line_df["X"], line_df["Hardness_LINE"], marker="o", label="LINE")
+            ax.axhline(lo, linestyle="--", label="LSL")
+            ax.axhline(hi, linestyle="--", label="USL")
+            ax.set_title("Hardness LINE")
+            ax.set_ylim(y_min, y_max)
+            ax.set_yticks(np.arange(y_min, y_max+0.01, 2.5))
+            ax.grid(alpha=0.3)
+            ax.legend(bbox_to_anchor=(1.02,0.5), loc="center left", frameon=False)
+            st.pyplot(fig)
+
+    # ================================
+    # VIEW 3 — DISTRIBUTION
+    # ================================
+    if view_mode == "📊 Distribution":
+        fig, ax = plt.subplots(figsize=(6,3))
+        ax.hist(lab_df["Hardness_LAB"], bins=10, alpha=0.6, label="LAB")
+        ax.hist(line_df["Hardness_LINE"], bins=10, alpha=0.6, label="LINE")
+        ax.axvline(lo, linestyle="--", label="LSL")
+        ax.axvline(hi, linestyle="--", label="USL")
+        ax.legend()
+        ax.set_title("Hardness Distribution")
         st.pyplot(fig)
