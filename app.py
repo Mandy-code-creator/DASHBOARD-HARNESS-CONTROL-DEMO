@@ -245,10 +245,11 @@ for _, cond in valid_conditions.iterrows():
             st.pyplot(fig)
             img = fig_to_png(fig)
             st.download_button(
-                "⬇️ Download LAB Trend",
-                data=img,
-                file_name=f"{spec}_LAB_trend.png",
-                mime="image/png"
+            "⬇️ Download LAB Trend",
+            data=img,
+            file_name=f"{spec}_LAB_trend.png",
+            mime="image/png",
+            key=f"dl_lab_{spec}_{mat}_{gauge}_{coat}"
             )
 
         with c2:
@@ -263,11 +264,13 @@ for _, cond in valid_conditions.iterrows():
             st.pyplot(fig)
             img = fig_to_png(fig)
             st.download_button(
-                "⬇️ Download LINE Trend",
-                data=img,
-                file_name=f"{spec}_LINE_trend.png",
-                mime="image/png"
+            "⬇️ Download LINE Trend",
+            data=img,
+            file_name=f"{spec}_LINE_trend.png",
+            mime="image/png",
+            key=f"dl_line_{spec}_{mat}_{gauge}_{coat}"
             )
+
 
     # ================================
     # ================================
