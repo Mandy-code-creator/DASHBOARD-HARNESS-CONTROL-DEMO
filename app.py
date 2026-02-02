@@ -241,7 +241,7 @@ sub_dist = sub.sort_values("COIL_NO").reset_index(drop=True).copy()
 lab_df  = sub_dist[sub_dist["Hardness_LAB"]  > 0]
 line_df = sub_dist[sub_dist["Hardness_LINE"] > 0]
 
-    if view_mode == "📊 Distribution":
+if view_mode == "📊 Distribution":
        fig, ax = plt.subplots(figsize=(5, 4))
 
 ax.hist(
