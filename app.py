@@ -1,21 +1,19 @@
 # ================================
-# HARDNESS CONTROL DASHBOARD
-# Views 1–2–3 giữ nguyên logic dữ liệu
-# View 4: Hardness Safety Analysis (không phá logic cũ)
+# FULL STREAMLIT APP – STABLE VERSION
 # ================================
 
 import streamlit as st
 import pandas as pd
 import numpy as np
+import requests
+from io import StringIO, BytesIO
 import matplotlib.pyplot as plt
-from io import BytesIO
 
 # ================================
-# CONFIG
+# PAGE CONFIG
 # ================================
-st.set_page_config(page_title="Hardness Control Dashboard", layout="wide")
-
-DATA_URL = "https://docs.google.com/spreadsheets/d/1GdnY09hJ2qVHuEBAIJ-eU6B5z8ZdgcGf4P7ZjlAt4JI/export?format=csv"
+st.set_page_config(page_title="Material-level Hardness Detail", layout="wide")
+st.title("📊 Material-level Hardness & Mechanical Detail")
 
 # ================================
 # UTILS
@@ -29,24 +27,103 @@ def fig_to_png(fig, dpi=200):
 # ================================
 # LOAD DATA
 # ================================
+DATA_URL = "https://docs.google.com/spreadsheets/d/1GdnY09hJ2qVHuEBAIJ-eU6B5z8ZdgcGf4P7ZjlAt4JI/export?format=csv"
+
 @st.cache_data
-def load_data():
-    return pd.read_csv(DATA_URL)
+def load_data(url):
+    r = requests.get(url)
+    r.encoding = "utf-8"
+    return pd.read_csv(StringIO(r.text))
 
-df = load_data()
+raw = load_data(DATA_URL)
 
 # ================================
-# SIDEBAR FILTER (GIỮ NGUYÊN)
+# FIND METALLIC TYPE COLUMN
 # ================================
-st.sidebar.header("Filter")
-spec = st.sidebar.selectbox("Product Spec", sorted(df["Product_Spec"].dropna().unique()))
-material = st.sidebar.selectbox("Material", sorted(df["Material"].dropna().unique()))
-coat = st.sidebar.selectbox("Top Coat", sorted(df["Top_Coatmass"].dropna().unique()))
-gauge = st.sidebar.selectbox("Gauge", sorted(df["Order_Gauge"].dropna().unique()))
+metal_col = None
+for c in raw.columns:
+    if "METALLIC" in c.upper() and "COATING" in c.upper():
+        metal_col = c
+        break
 
+if metal_col is None:
+    st.error("❌ Cannot find METALLIC COATING TYPE column")
+    st.stop()
+
+raw["Metallic_Type"] = raw[metal_col]
+
+# ================================
+# RENAME COLUMNS (CRITICAL FIX)
+# ================================
+df = raw.rename(columns={
+    "PRODUCT SPECIFICATION CODE": "Product_Spec",
+    "HR STEEL GRADE": "Material",
+    "Claasify material": "Rolling_Type",
+    "TOP COATMASS": "Top_Coatmass",
+    "ORDER GAUGE": "Order_Gauge",
+    "COIL NO": "COIL_NO",
+    "QUALITY_CODE": "Quality_Code",
+    "Standard Hardness": "Std_Range_Text",
+    "HARDNESS 冶金": "Hardness_LAB",
+    "HARDNESS 鍍鋅線 C": "Hardness_LINE",
+    "TENSILE_YIELD": "YS",
+    "TENSILE_TENSILE": "TS",
+    "TENSILE_ELONG": "EL",
+    "Standard_YS_Min": "Standard_YS_Min",
+    "Standard_YS_Max": "Standard_YS_Max",
+    "Standard_TS_Min": "Standard_TS_Min",
+    "Standard_TS_Max": "Standard_TS_Max",
+    "Standard_EL_Min": "Standard_EL_Min",
+})
+
+# ================================
+# FORCE NUMERIC
+# ================================
+for c in [
+    "Hardness_LAB","Hardness_LINE",
+    "YS","TS","EL",
+    "Standard_YS_Min","Standard_YS_Max",
+    "Standard_TS_Min","Standard_TS_Max",
+    "Standard_EL_Min"
+]:
+    if c in df.columns:
+        df[c] = pd.to_numeric(df[c], errors="coerce")
+
+# ================================
+# SPLIT HARDNESS STANDARD
+# ================================
+def split_std(x):
+    if isinstance(x, str) and "~" in x:
+        try:
+            lo, hi = x.split("~")
+            return pd.Series([float(lo), float(hi)])
+        except:
+            return pd.Series([np.nan, np.nan])
+    return pd.Series([np.nan, np.nan])
+
+df[["Std_Min","Std_Max"]] = df["Std_Range_Text"].apply(split_std)
+
+# ================================
+# SIDEBAR FILTERS
+# ================================
+st.sidebar.header("🎛 FILTERS")
+
+rolling = st.sidebar.radio("Rolling Type", sorted(df["Rolling_Type"].dropna().unique()))
+df = df[df["Rolling_Type"] == rolling]
+
+metal = st.sidebar.radio("Metallic Coating", sorted(df["Metallic_Type"].dropna().unique()))
+df = df[df["Metallic_Type"] == metal]
+
+qc = st.sidebar.radio("Quality Code", sorted(df["Quality_Code"].dropna().unique()))
+df = df[df["Quality_Code"] == qc]
+
+# ================================
+# VIEW MODE
+# ================================
 view_mode = st.sidebar.radio(
-    "View Mode",
+    "📊 View Mode",
     [
+        "📋 Data Table",
         "📈 Trend (LAB / LINE)",
         "📊 Distribution",
         "📐 Hardness Safety Analysis"
@@ -54,135 +131,146 @@ view_mode = st.sidebar.radio(
 )
 
 # ================================
-# FILTER SUB (⚠️ TUYỆT ĐỐI KHÔNG ĐỤNG LOGIC CŨ)
+# GROUP CONDITIONS ≥30 COILS
 # ================================
-sub = df[
-    (df["Product_Spec"] == spec) &
-    (df["Material"] == material) &
-    (df["Top_Coatmass"] == coat) &
-    (df["Order_Gauge"] == gauge)
-].copy().sort_values("COIL_NO").reset_index(drop=True)
+GROUP_COLS = ["Product_Spec","Material","Metallic_Type","Top_Coatmass","Order_Gauge"]
 
-if sub.empty:
-    st.warning("No data after filter")
+valid_conditions = (
+    df.groupby(GROUP_COLS)
+      .agg(N_Coils=("COIL_NO","nunique"))
+      .reset_index()
+)
+
+valid_conditions = valid_conditions[valid_conditions["N_Coils"] >= 30]
+
+if valid_conditions.empty:
+    st.warning("⚠️ No condition with ≥30 coils")
     st.stop()
 
-# STD HARDNESS (logic cũ)
-lo, hi = sub[["Std_Min", "Std_Max"]].iloc[0]
-
-lab_df = sub.dropna(subset=["Hardness_LAB"])
-line_df = sub.dropna(subset=["Hardness_LINE"])
-
 # ================================
-# VIEW 1 — TREND (GIỮ NGUYÊN)
+# MAIN LOOP
 # ================================
-if view_mode == "📈 Trend (LAB / LINE)":
+for _, cond in valid_conditions.iterrows():
 
-    c1, c2 = st.columns(2)
+    spec, mat, coat, gauge, n = (
+        cond["Product_Spec"], cond["Material"],
+        cond["Top_Coatmass"], cond["Order_Gauge"],
+        int(cond["N_Coils"])
+    )
 
-    for title, df_plot, col, label, col_ui in [
-        ("LAB", lab_df, "Hardness_LAB", "lab", c1),
-        ("LINE", line_df, "Hardness_LINE", "line", c2)
-    ]:
-        with col_ui:
-            fig, ax = plt.subplots(figsize=(5,3))
-            ax.plot(df_plot.index + 1, df_plot[col], marker="o")
+    sub = (
+        df[
+            (df["Product_Spec"] == spec) &
+            (df["Material"] == mat) &
+            (df["Top_Coatmass"] == coat) &
+            (df["Order_Gauge"] == gauge)
+        ]
+        .copy()
+        .sort_values("COIL_NO")
+        .reset_index(drop=True)
+    )
+
+    lo, hi = sub[["Std_Min","Std_Max"]].iloc[0]
+
+    # ================================
+    # QA STRICT (GIỮ NGUYÊN)
+    # ================================
+    sub["NG_LAB"]  = (sub["Hardness_LAB"]  < lo) | (sub["Hardness_LAB"]  > hi)
+    sub["NG_LINE"] = (sub["Hardness_LINE"] < lo) | (sub["Hardness_LINE"] > hi)
+    sub["COIL_NG"] = sub["NG_LAB"] | sub["NG_LINE"]
+
+    # ================================
+    # MECHANICAL PASS
+    # ================================
+    if {"Standard_YS_Min","Standard_YS_Max",
+        "Standard_TS_Min","Standard_TS_Max",
+        "Standard_EL_Min"}.issubset(sub.columns):
+
+        ys_lo, ys_hi = sub[["Standard_YS_Min","Standard_YS_Max"]].iloc[0]
+        ts_lo, ts_hi = sub[["Standard_TS_Min","Standard_TS_Max"]].iloc[0]
+        el_lo = sub["Standard_EL_Min"].iloc[0]
+
+        sub["MECH_PASS"] = (
+            (sub["YS"] >= ys_lo) & (sub["YS"] <= ys_hi) &
+            (sub["TS"] >= ts_lo) & (sub["TS"] <= ts_hi) &
+            (sub["EL"] >= el_lo)
+        )
+    else:
+        sub["MECH_PASS"] = False
+
+    n_out = sub[sub["COIL_NG"]]["COIL_NO"].nunique()
+    qa_result = "FAIL" if n_out > 0 else "PASS"
+
+    st.markdown(
+        f"## 🧱 `{spec}`  \n"
+        f"Material: **{mat}** | Coatmass: **{coat}** | Gauge: **{gauge}**  \n"
+        f"➡️ n = **{n} coils** | ❌ Out = **{n_out}** | 🧪 **{qa_result}**"
+    )
+
+    # ================================
+    # VIEW 1 — DATA TABLE
+    # ================================
+    if view_mode == "📋 Data Table":
+        st.dataframe(sub, use_container_width=True)
+
+    # ================================
+    # VIEW 2 — TREND
+    # ================================
+    elif view_mode == "📈 Trend (LAB / LINE)":
+        sub["X"] = np.arange(1, len(sub)+1)
+        c1, c2 = st.columns(2)
+
+        with c1:
+            fig, ax = plt.subplots()
+            ax.plot(sub["X"], sub["Hardness_LAB"], marker="o")
             ax.axhline(lo, linestyle="--")
             ax.axhline(hi, linestyle="--")
-            ax.set_title(f"Hardness {title}")
-            ax.set_xlabel("Coil Order")
-            ax.set_ylabel("HRB")
-            ax.grid(alpha=0.3)
             st.pyplot(fig)
-            st.download_button(
-                f"⬇️ Download {title} Trend",
-                data=fig_to_png(fig),
-                file_name=f"{spec}_{title}_trend.png",
-                mime="image/png",
-                key=f"dl_{label}_{spec}_{gauge}"
-            )
 
-# ================================
-# VIEW 2 — DISTRIBUTION (GIỮ NGUYÊN)
-# ================================
-elif view_mode == "📊 Distribution":
+        with c2:
+            fig, ax = plt.subplots()
+            ax.plot(sub["X"], sub["Hardness_LINE"], marker="o")
+            ax.axhline(lo, linestyle="--")
+            ax.axhline(hi, linestyle="--")
+            st.pyplot(fig)
 
-    fig, ax = plt.subplots(figsize=(6,4))
-    ax.hist(lab_df["Hardness_LAB"], bins=10, alpha=0.5, label="LAB")
-    ax.hist(line_df["Hardness_LINE"], bins=10, alpha=0.5, label="LINE")
-    ax.axvline(lo, linestyle="--")
-    ax.axvline(hi, linestyle="--")
-    ax.set_xlabel("HRB")
-    ax.set_ylabel("Count")
-    ax.legend()
-    ax.grid(alpha=0.3)
-    st.pyplot(fig)
-
-    st.download_button(
-        "⬇️ Download Distribution",
-        data=fig_to_png(fig),
-        file_name=f"{spec}_distribution.png",
-        mime="image/png",
-        key=f"dl_dist_{spec}_{gauge}"
-    )
-
-# ================================
-# VIEW 3 — HARDNESS SAFETY (CHỈ THÊM, KHÔNG PHÁ)
-# ================================
-elif view_mode == "📐 Hardness Safety Analysis":
-
-    st.markdown("## 📐 Hardness Safety Analysis (Bin = 1 HRB)")
-    st.caption("🎯 SAFE = 100% PASS YS + TS + EL")
-
-    mech_cols = [
-        "YS", "TS", "EL",
-        "Standard_YS_Min", "Standard_YS_Max",
-        "Standard_TS_Min", "Standard_TS_Max",
-        "Standard_EL_Min", "Standard_EL_Max"
-    ]
-
-    missing = [c for c in mech_cols if c not in sub.columns]
-    if missing:
-        st.warning(f"⚠️ Missing mechanical standard columns: {missing}")
-        st.stop()
-
-    sub["MECH_PASS"] = (
-        (sub["YS"] >= sub["Standard_YS_Min"]) & (sub["YS"] <= sub["Standard_YS_Max"]) &
-        (sub["TS"] >= sub["Standard_TS_Min"]) & (sub["TS"] <= sub["Standard_TS_Max"]) &
-        (sub["EL"] >= sub["Standard_EL_Min"]) & (sub["EL"] <= sub["Standard_EL_Max"])
-    )
-
-    mech_ok = sub[sub["MECH_PASS"]].copy()
-
-    mech_ok["HRB_LAB_BIN"]  = mech_ok["Hardness_LAB"].round().astype("Int64")
-    mech_ok["HRB_LINE_BIN"] = mech_ok["Hardness_LINE"].round().astype("Int64")
-
-    c1, c2 = st.columns(2)
-
-    # LAB
-    with c1:
-        lab_bin = mech_ok.groupby("HRB_LAB_BIN").agg(
-            n=("COIL_NO", "count"), pass_rate=("MECH_PASS", "mean")
-        ).reset_index()
-
-        fig, ax = plt.subplots(figsize=(5,4))
-        ax.bar(lab_bin["HRB_LAB_BIN"], lab_bin["pass_rate"])
-        ax.axhline(1.0, linestyle="--")
-        ax.set_ylim(0, 1.05)
-        ax.set_title("LAB – SAFE HRB")
-        ax.grid(alpha=0.3)
+    # ================================
+    # VIEW 3 — DISTRIBUTION
+    # ================================
+    elif view_mode == "📊 Distribution":
+        fig, ax = plt.subplots()
+        ax.hist(sub["Hardness_LAB"].dropna(), alpha=0.5, label="LAB")
+        ax.hist(sub["Hardness_LINE"].dropna(), alpha=0.5, label="LINE")
+        ax.axvline(lo, linestyle="--")
+        ax.axvline(hi, linestyle="--")
+        ax.legend()
         st.pyplot(fig)
 
-    # LINE
-    with c2:
-        line_bin = mech_ok.groupby("HRB_LINE_BIN").agg(
-            n=("COIL_NO", "count"), pass_rate=("MECH_PASS", "mean")
-        ).reset_index()
+    # ================================
+    # VIEW 4 — SAFETY ANALYSIS
+    # ================================
+    elif view_mode == "📐 Hardness Safety Analysis":
+        mech_ok = sub[sub["MECH_PASS"]].copy()
 
-        fig, ax = plt.subplots(figsize=(5,4))
-        ax.bar(line_bin["HRB_LINE_BIN"], line_bin["pass_rate"])
-        ax.axhline(1.0, linestyle="--")
-        ax.set_ylim(0, 1.05)
-        ax.set_title("LINE – SAFE HRB")
-        ax.grid(alpha=0.3)
-        st.pyplot(fig)
+        if mech_ok.empty:
+            st.warning("⚠️ No mechanical PASS data")
+            continue
+
+        mech_ok["LAB_BIN"]  = mech_ok["Hardness_LAB"].round().astype("Int64")
+        mech_ok["LINE_BIN"] = mech_ok["Hardness_LINE"].round().astype("Int64")
+
+        c1, c2 = st.columns(2)
+
+        with c1:
+            lab = mech_ok.groupby("LAB_BIN")["MECH_PASS"].mean()
+            fig, ax = plt.subplots()
+            ax.bar(lab.index, lab.values)
+            ax.axhline(1.0, linestyle="--")
+            st.pyplot(fig)
+
+        with c2:
+            line = mech_ok.groupby("LINE_BIN")["MECH_PASS"].mean()
+            fig, ax = plt.subplots()
+            ax.bar(line.index, line.values)
+            ax.axhline(1.0, linestyle="--")
+            st.pyplot(fig)
