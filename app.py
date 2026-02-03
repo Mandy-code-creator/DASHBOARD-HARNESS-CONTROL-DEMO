@@ -149,13 +149,12 @@ view_mode = st.sidebar.radio(
 )
 
 if view_mode == "📐 Hardness Optimal Range (IQR)":
-    K = st.sidebar.slider(
-        "IQR Multiplier (K)",
-        min_value=0.5,
-        max_value=3.0,
-        value=1.5,
-        step=0.1
+    K = st.sidebar.selectbox(
+        "IQR factor K",
+        [0.5, 0.75, 1.0, 1.25, 1.5],
+        index=2
     )
+
 
 st.write("DEBUG view_mode =", view_mode)
 
@@ -393,75 +392,70 @@ for _, cond in valid_conditions.iterrows():
     # ================================
         # ================================
     # ================================
-    # ================================
+   # ================================
     # VIEW 4 — HARDNESS OPTIMAL RANGE (IQR)
     # ================================
     elif view_mode == "📐 Hardness Optimal Range (IQR)":
     
-        st.markdown("## 📐 Hardness Optimal Range by IQR")
-        st.caption("📌 LAB | LINE analyzed separately – IQR based (adjustable K)")
-    
-        lab_df  = sub[sub["Hardness_LAB"]  > 0]
-        line_df = sub[sub["Hardness_LINE"] > 0]
+        st.markdown("## 📐 Hardness Optimal Range – IQR Method")
+        st.caption("📌 Phân tích thống kê – không ảnh hưởng QA PASS/FAIL")
     
         c1, c2 = st.columns(2)
     
-        def iqr_range(series, K):
-            q1 = series.quantile(0.25)
-            q3 = series.quantile(0.75)
-            iqr = q3 - q1
-            return q1 - K * iqr, q3 + K * iqr, q1, q3
-    
-        # ===== LAB =====
+        # ================= LAB =================
         with c1:
             st.markdown("### 🧪 LAB")
     
-            if len(lab_df) < 5:
-                st.warning("Not enough LAB data for IQR analysis")
+            lab = sub[sub["Hardness_LAB"] > 0]["Hardness_LAB"]
+    
+            if len(lab) < 5:
+                st.warning("⚠️ LAB: không đủ dữ liệu để phân tích IQR")
             else:
-                lo_iqr, hi_iqr, q1, q3 = iqr_range(lab_df["Hardness_LAB"], K)
+                q1, q3 = lab.quantile([0.25, 0.75])
+                iqr = q3 - q1
+                lo_iqr = q1 - K * iqr
+                hi_iqr = q3 + K * iqr
     
                 fig, ax = plt.subplots(figsize=(5,3))
-                ax.hist(lab_df["Hardness_LAB"], bins=10, edgecolor="black", alpha=0.7)
-                ax.axvline(lo_iqr, linestyle="--", label="IQR Lower")
-                ax.axvline(hi_iqr, linestyle="--", label="IQR Upper")
-                ax.axvline(lo, linestyle=":", label="Std Min")
-                ax.axvline(hi, linestyle=":", label="Std Max")
-                ax.set_title("LAB – Optimal Hardness Range (IQR)")
-                ax.set_xlabel("HRB")
-                ax.legend(bbox_to_anchor=(1.02,0.5), loc="center left", frameon=False)
+                ax.hist(lab, bins=10, edgecolor="black", alpha=0.6)
+                ax.axvline(lo_iqr, linestyle="--", label="IQR Low")
+                ax.axvline(hi_iqr, linestyle="--", label="IQR High")
+                ax.axvline(lab.mean(), linestyle="-.", label="Mean")
+                ax.set_title(f"LAB Hardness (K = {K})")
+                ax.legend()
                 ax.grid(alpha=0.3)
     
                 st.pyplot(fig)
     
                 st.success(
-                    f"✅ LAB Optimal HRB Range (K={K}): "
-                    f"{lo_iqr:.1f} ~ {hi_iqr:.1f}"
+                    f"✅ LAB Optimal HRB (IQR): **{lo_iqr:.1f} ~ {hi_iqr:.1f}**"
                 )
     
-        # ===== LINE =====
+        # ================= LINE =================
         with c2:
             st.markdown("### 🏭 LINE")
     
-            if len(line_df) < 5:
-                st.warning("Not enough LINE data for IQR analysis")
+            line = sub[sub["Hardness_LINE"] > 0]["Hardness_LINE"]
+    
+            if len(line) < 5:
+                st.warning("⚠️ LINE: không đủ dữ liệu để phân tích IQR")
             else:
-                lo_iqr, hi_iqr, q1, q3 = iqr_range(line_df["Hardness_LINE"], K)
+                q1, q3 = line.quantile([0.25, 0.75])
+                iqr = q3 - q1
+                lo_iqr = q1 - K * iqr
+                hi_iqr = q3 + K * iqr
     
                 fig, ax = plt.subplots(figsize=(5,3))
-                ax.hist(line_df["Hardness_LINE"], bins=10, edgecolor="black", alpha=0.7)
-                ax.axvline(lo_iqr, linestyle="--", label="IQR Lower")
-                ax.axvline(hi_iqr, linestyle="--", label="IQR Upper")
-                ax.axvline(lo, linestyle=":", label="Std Min")
-                ax.axvline(hi, linestyle=":", label="Std Max")
-                ax.set_title("LINE – Optimal Hardness Range (IQR)")
-                ax.set_xlabel("HRB")
-                ax.legend(bbox_to_anchor=(1.02,0.5), loc="center left", frameon=False)
+                ax.hist(line, bins=10, edgecolor="black", alpha=0.6)
+                ax.axvline(lo_iqr, linestyle="--", label="IQR Low")
+                ax.axvline(hi_iqr, linestyle="--", label="IQR High")
+                ax.axvline(line.mean(), linestyle="-.", label="Mean")
+                ax.set_title(f"LINE Hardness (K = {K})")
+                ax.legend()
                 ax.grid(alpha=0.3)
     
                 st.pyplot(fig)
     
                 st.success(
-                    f"✅ LINE Optimal HRB Range (K={K}): "
-                    f"{lo_iqr:.1f} ~ {hi_iqr:.1f}"
+                    f"✅ LINE Optimal HRB (IQR): **{lo_iqr:.1f} ~ {hi_iqr:.1f}**"
                 )
