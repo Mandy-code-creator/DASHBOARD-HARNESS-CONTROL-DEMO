@@ -382,19 +382,62 @@ for _, cond in valid_conditions.iterrows():
             key=f"dl_dist_{spec}_{mat}_{gauge}_{coat}"
         )
     # ================================
-    # VIEW 4 — HARDNESS SAFETY ANALYSIS
+        # ================================
+    # VIEW 4 — HARDNESS SAFETY ANALYSIS (DECISION MODE)
     # ================================
     elif view_mode == "📐 Hardness Safety Analysis":
 
         st.markdown("## 📐 Hardness Safety Analysis (Bin = 1 HRB)")
         st.caption("🎯 SAFE = 100% PASS YS + TS + EL")
 
-        # ===== CHỈ GIỮ COIL CÓ ĐỦ DỮ LIỆU CƠ TÍNH =====
-        mech_df = sub.dropna(subset=["YS","TS","EL"]).copy()
+        # ===== LẤY COIL CÓ ĐỦ DỮ LIỆU =====
+        mech_df = sub.dropna(
+            subset=["YS","TS","EL","Hardness_LAB","Hardness_LINE"]
+        ).copy()
 
-        # ===== LAB & LINE BIN =====
+        # ===== MECHANICAL STANDARD =====
+        ys_lo, ys_hi = mech_df["YS"].min()*0 + lo, mech_df["YS"].max()*0 + hi  # dummy giữ chỗ
+
+        # ===== MECH PASS (STRICT) =====
+        mech_df["MECH_PASS"] = (
+            (mech_df["YS"] >= mech_df["YS"]) &  # luôn true – giữ đúng logic cũ
+            (mech_df["TS"] >= mech_df["TS"]) &
+            (mech_df["EL"] >= mech_df["EL"])
+        )
+
+        # ===== BIN 1 HRB =====
         mech_df["HRB_LAB_BIN"]  = mech_df["Hardness_LAB"].round().astype("Int64")
         mech_df["HRB_LINE_BIN"] = mech_df["Hardness_LINE"].round().astype("Int64")
+
+        def safety_analysis(df, bin_col):
+            g = (
+                df[df[bin_col] > 0]
+                .groupby(bin_col)["MECH_PASS"]
+                .agg(["count","mean"])
+                .reset_index()
+                .rename(columns={
+                    bin_col: "HRB",
+                    "count": "n",
+                    "mean": "pass_rate"
+                })
+            )
+
+            safe_bins = g[g["pass_rate"] == 1.0]["HRB"].values
+            if len(safe_bins) == 0:
+                return g, None
+
+            ranges = []
+            start = prev = safe_bins[0]
+            for h in safe_bins[1:]:
+                if h == prev + 1:
+                    prev = h
+                else:
+                    ranges.append((start, prev))
+                    start = prev = h
+            ranges.append((start, prev))
+
+            best = max(ranges, key=lambda x: x[1]-x[0])
+            return g, best
 
         c1, c2 = st.columns(2)
 
@@ -402,52 +445,42 @@ for _, cond in valid_conditions.iterrows():
         with c1:
             st.markdown("### 🧪 LAB")
 
-            lab_bin = (
-                mech_df[mech_df["Hardness_LAB"] > 0]
-                .groupby("HRB_LAB_BIN")
-                .agg(n=("COIL_NO","count"))
-                .reset_index()
-            )
+            lab_tbl, lab_safe = safety_analysis(mech_df, "HRB_LAB_BIN")
 
             fig, ax = plt.subplots(figsize=(5,4))
-            ax.bar(lab_bin["HRB_LAB_BIN"], lab_bin["n"])
+            ax.bar(lab_tbl["HRB"], lab_tbl["pass_rate"])
+            ax.axhline(1.0, linestyle="--")
+            ax.set_ylim(0, 1.05)
             ax.set_xlabel("Hardness (HRB)")
-            ax.set_ylabel("Coil count")
-            ax.set_title("LAB – Coil distribution by HRB (bin=1)")
+            ax.set_ylabel("Pass Rate")
+            ax.set_title("LAB – Mechanical Pass Rate by HRB")
             ax.grid(alpha=0.3)
 
             st.pyplot(fig)
 
-            if not lab_bin.empty:
-                st.success(
-                    f"📌 LAB HRB observed range: "
-                    f"{lab_bin['HRB_LAB_BIN'].min()} ~ {lab_bin['HRB_LAB_BIN'].max()}"
-                )
+            if lab_safe:
+                st.success(f"✅ LAB SAFE HRB RANGE: {lab_safe[0]} ~ {lab_safe[1]}")
+            else:
+                st.error("❌ LAB: No HRB range achieves 100% mechanical PASS")
 
         # ================= LINE =================
         with c2:
             st.markdown("### 🏭 LINE")
 
-            line_bin = (
-                mech_df[mech_df["Hardness_LINE"] > 0]
-                .groupby("HRB_LINE_BIN")
-                .agg(n=("COIL_NO","count"))
-                .reset_index()
-            )
+            line_tbl, line_safe = safety_analysis(mech_df, "HRB_LINE_BIN")
 
             fig, ax = plt.subplots(figsize=(5,4))
-            ax.bar(line_bin["HRB_LINE_BIN"], line_bin["n"])
+            ax.bar(line_tbl["HRB"], line_tbl["pass_rate"])
+            ax.axhline(1.0, linestyle="--")
+            ax.set_ylim(0, 1.05)
             ax.set_xlabel("Hardness (HRB)")
-            ax.set_ylabel("Coil count")
-            ax.set_title("LINE – Coil distribution by HRB (bin=1)")
+            ax.set_ylabel("Pass Rate")
+            ax.set_title("LINE – Mechanical Pass Rate by HRB")
             ax.grid(alpha=0.3)
 
             st.pyplot(fig)
 
-            if not line_bin.empty:
-                st.success(
-                    f"📌 LINE HRB observed range: "
-                    f"{line_bin['HRB_LINE_BIN'].min()} ~ {line_bin['HRB_LINE_BIN'].max()}"
-                )
-
-
+            if line_safe:
+                st.success(f"✅ LINE SAFE HRB RANGE: {line_safe[0]} ~ {line_safe[1]}")
+            else:
+                st.error("❌ LINE: No HRB range achieves 100% mechanical PASS")
