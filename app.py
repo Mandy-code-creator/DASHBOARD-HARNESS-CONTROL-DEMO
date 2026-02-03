@@ -229,6 +229,25 @@ for _, cond in valid_conditions.iterrows():
     sub["NG_LAB"]  = (sub["Hardness_LAB"]  < lo) | (sub["Hardness_LAB"]  > hi)
     sub["NG_LINE"] = (sub["Hardness_LINE"] < lo) | (sub["Hardness_LINE"] > hi)
     sub["COIL_NG"] = sub["NG_LAB"] | sub["NG_LINE"]
+    # ================================
+    # MECHANICAL STANDARD (PER SPEC)
+    # ================================
+    ys_lo = sub["Standard_YS_Min"].iloc[0]
+    ys_hi = sub["Standard_YS_Max"].iloc[0]
+
+    ts_lo = sub["Standard_TS_Min"].iloc[0]
+    ts_hi = sub["Standard_TS_Max"].iloc[0]
+
+    el_lo = sub["Standard_EL_Min"].iloc[0]
+
+    # ================================
+    # MECHANICAL PASS FLAG (STRICT)
+    # ================================
+    sub["MECH_PASS"] = (
+        (sub["YS"] >= ys_lo) & (sub["YS"] <= ys_hi) &
+        (sub["TS"] >= ts_lo) & (sub["TS"] <= ts_hi) &
+        (sub["EL"] >= el_lo)
+    )
 
     n_out = sub[sub["COIL_NG"]]["COIL_NO"].nunique()
     qa_result = "FAIL" if n_out > 0 else "PASS"
@@ -240,17 +259,7 @@ for _, cond in valid_conditions.iterrows():
     )
 
     # ================================
-    # ================================
-# MECHANICAL PASS FLAG
-# ================================
-if "MECH_PASS" not in sub.columns:
-    sub["MECH_PASS"] = (
-        (sub["YS"] >= ys_lo) & (sub["YS"] <= ys_hi) &
-        (sub["TS"] >= ts_lo) & (sub["TS"] <= ts_hi) &
-        (sub["EL"] >= el_lo)
-    )
-
-    # ================================
+     # ================================
     # VIEW 1 — DATA TABLE
     # ================================
     if view_mode == "📋 Data Table":
