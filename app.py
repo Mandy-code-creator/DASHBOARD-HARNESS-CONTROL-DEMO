@@ -394,126 +394,83 @@ for _, cond in valid_conditions.iterrows():
     # ================================
    # ================================
     # ================================
-    # VIEW 4 — HARDNESS SAFETY ANALYSIS (IQR-BASED)
+       # ================================
+    # VIEW 4 — HARDNESS SAFETY ANALYSIS (IQR OPTIMAL RANGE)
     # ================================
     elif view_mode == "📐 Hardness Safety Analysis":
-    
-        st.subheader("📐 Hardness Safety / Optimal Range Analysis (IQR)")
-    
-        # ===== USER SELECT IQR FACTOR K =====
-        k = st.selectbox(
-            "IQR factor (K)",
-            [0.5, 0.75, 1.0, 1.25, 1.5],
-            index=2
+
+        st.markdown("### 📐 Hardness Safety Analysis – IQR Method")
+        st.caption("🎯 LAB & LINE combined | Adjustable K | Suggest Optimal Control Range")
+
+        # ===== USER SELECT K =====
+        k = st.select_slider(
+            "IQR Coefficient (K)",
+            options=[0.5, 0.75, 1.0, 1.25, 1.5],
+            value=1.0
         )
-    
-        # ===== COLLECT HARDNESS DATA (LAB + LINE) =====
-        lab_vals  = sub["Hardness_LAB"].dropna()
-        line_vals = sub["Hardness_LINE"].dropna()
-    
-        all_vals = pd.concat([lab_vals, line_vals])
-        all_vals = all_vals[all_vals > 0]
-    
-        if len(all_vals) < 10:
-            st.warning("⚠️ Not enough hardness data for IQR analysis")
+
+        # ===== FILTER VALID DATA =====
+        lab = sub[sub["Hardness_LAB"] > 0]["Hardness_LAB"]
+        line = sub[sub["Hardness_LINE"] > 0]["Hardness_LINE"]
+
+        if lab.empty or line.empty:
+            st.warning("⚠️ Not enough valid LAB / LINE data")
             st.stop()
-    
-        # ===== IQR CALCULATION =====
-        q1 = all_vals.quantile(0.25)
-        q3 = all_vals.quantile(0.75)
-        iqr = q3 - q1
-    
-        L_opt = q1 - k * iqr
-        U_opt = q3 + k * iqr
-    
+
+        # ===== IQR CALC =====
+        def iqr_range(x, k):
+            q1 = x.quantile(0.25)
+            q3 = x.quantile(0.75)
+            iqr = q3 - q1
+            return q1 - k * iqr, q3 + k * iqr, q1, q3
+
+        L_lab, U_lab, q1_lab, q3_lab = iqr_range(lab, k)
+        L_line, U_line, q1_line, q3_line = iqr_range(line, k)
+
+        # ===== COMBINED OPTIMAL RANGE =====
+        opt_lo = max(L_lab, L_line)
+        opt_hi = min(U_lab, U_line)
+
+        spec_lo, spec_hi = lo, hi
+
+        safe_lo = max(opt_lo, spec_lo)
+        safe_hi = min(opt_hi, spec_hi)
+
+        target = (safe_lo + safe_hi) / 2 if safe_lo < safe_hi else np.nan
+
+        # ===== FIGURE =====
+        fig, ax = plt.subplots(figsize=(6,4))
+
+        ax.hist(lab, bins=10, alpha=0.5, label="LAB", edgecolor="black")
+        ax.hist(line, bins=10, alpha=0.5, label="LINE", edgecolor="black")
+
         # ===== SPEC LIMIT =====
-        spec_lo = sub["Std_Min"].iloc[0]
-        spec_hi = sub["Std_Max"].iloc[0]
-    
-        # ===== SAFE (INTERSECTION) RANGE =====
-        safe_lo = max(L_opt, spec_lo)
-        safe_hi = min(U_opt, spec_hi)
-    
-        # ===== TARGET HRB =====
-        target_hrb = (safe_lo + safe_hi) / 2
-    
-        # ===== SUMMARY METRIC =====
-        c1, c2, c3 = st.columns(3)
-    
-        with c1:
-            st.metric(
-                "Optimal Range (IQR)",
-                f"{L_opt:.1f} ~ {U_opt:.1f} HRB"
-            )
-    
-        with c2:
-            st.metric(
-                "SPEC Range",
-                f"{spec_lo:.1f} ~ {spec_hi:.1f} HRB"
-            )
-    
-        with c3:
-            st.metric(
-                "🎯 Suggested Target",
-                f"{target_hrb:.1f} HRB"
-            )
-    
-        # ===== PLOT =====
-        fig, ax = plt.subplots(figsize=(6.5, 4))
-    
-        # LAB & LINE scatter
-        ax.scatter(
-            lab_vals.index + 1,
-            lab_vals,
-            label="LAB",
-            alpha=0.7
-        )
-        ax.scatter(
-            line_vals.index + 1,
-            line_vals,
-            label="LINE",
-            alpha=0.7
-        )
-    
-        # SPEC LIMIT
-        ax.axhline(spec_lo, linestyle="--", linewidth=1, label="SPEC LSL")
-        ax.axhline(spec_hi, linestyle="--", linewidth=1, label="SPEC USL")
-    
-        # OPTIMAL RANGE
-        ax.axhspan(
-            L_opt, U_opt,
-            alpha=0.15,
-            label="Optimal (IQR)"
-        )
-    
-        # SAFE RANGE
-        ax.axhspan(
-            safe_lo, safe_hi,
-            alpha=0.25,
-            label="Safe Control Zone"
-        )
-    
-        # TARGET
-        ax.axhline(
-            target_hrb,
-            linestyle="-.",
-            linewidth=2,
-            label=f"Target = {target_hrb:.1f}"
-        )
-    
-        ax.set_title(f"{spec} | Hardness Safety Analysis")
-        ax.set_xlabel("Sample Index")
-        ax.set_ylabel("HRB")
+        ax.axvline(spec_lo, linestyle="--", linewidth=1, label="LSL")
+        ax.axvline(spec_hi, linestyle="--", linewidth=1, label="USL")
+
+        # ===== OPTIMAL RANGE =====
+        ax.axvspan(safe_lo, safe_hi, alpha=0.2, label="OPTIMAL RANGE")
+
+        # ===== TARGET =====
+        if not np.isnan(target):
+            ax.axvline(target, linestyle="-.", linewidth=2, label=f"TARGET ≈ {target:.1f}")
+
+        # ===== STYLE =====
+        ax.set_title("LAB + LINE Hardness | Optimal Control Range (IQR)")
+        ax.set_xlabel("HRB")
+        ax.set_ylabel("Count")
         ax.legend(bbox_to_anchor=(1.02, 0.5), loc="center left", frameon=False)
         ax.grid(alpha=0.3)
-    
+
         st.pyplot(fig)
-    
-        img = fig_to_png(fig)
-        st.download_button(
-            "⬇️ Download Safety Analysis Chart",
-            data=img,
-            file_name=f"{spec}_hardness_safety_analysis.png",
-            mime="image/png",
-            key=f"dl_safe_{spec}_{mat}_{gauge}_{coat}"
+
+        # ===== SUMMARY =====
+        st.markdown("#### 📌 Decision Summary")
+        st.write(
+            f"""
+            - **SPEC Range** : {spec_lo:.1f} ~ {spec_hi:.1f} HRB  
+            - **IQR Optimal Range** : {opt_lo:.1f} ~ {opt_hi:.1f} HRB  
+            - **SAFE Control Range** : {safe_lo:.1f} ~ {safe_hi:.1f} HRB  
+            - **🎯 Suggested Target HRB** : **{target:.1f}**
+            """
         )
