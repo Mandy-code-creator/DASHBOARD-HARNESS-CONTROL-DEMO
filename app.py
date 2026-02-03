@@ -421,7 +421,7 @@ for _, cond in valid_conditions.iterrows():
             key=f"dl_dist_{spec}_{mat}_{gauge}_{coat}"
         )
 # ================================
-    elif view_mode == "📐 Hardness Safety Analysis":
+ elif view_mode == "📐 Hardness Safety Analysis":
 
     st.markdown("## 📐 Hardness Safety Analysis (Bin = 1 HRB)")
     st.caption("🎯 SAFE = 100% PASS YS + TS + EL")
