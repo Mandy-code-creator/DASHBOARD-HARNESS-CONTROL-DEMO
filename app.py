@@ -178,13 +178,15 @@ df = df[df["Quality_Code"] == qc]
 # ================================
 view_mode = st.sidebar.radio(
     "📊 View Mode",
-    ["📋 Data Table","📈 Trend (LAB / LINE)","📊 Distribution"],
-     "📐 Hardness Safety Analysis"   # ← THÊM DÒNG NÀY
+    [
+        "📋 Data Table",
+        "📈 Trend (LAB / LINE)",
+        "📊 Distribution",
+        "📐 Hardness Safety Analysis"
     ],
     index=0
 )
-    index=0
-)
+
 st.write("DEBUG view_mode =", view_mode)
 
 # ================================
