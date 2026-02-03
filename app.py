@@ -417,60 +417,60 @@ for _, cond in valid_conditions.iterrows():
 # ================================
 # VIEW 4 — HARDNESS SAFETY ANALYSIS
 # ================================
-elif view_mode == "📐 Hardness Safety Analysis":
+    elif view_mode == "📐 Hardness Safety Analysis":
 
-    st.markdown("## 📐 Hardness Safe Range (100% Mechanical PASS)")
-    st.caption("Bin = 1 HRB | Rule: 1 NG → FAIL (QA Strict)")
-
-    c1, c2 = st.columns(2)
-
-    for ax_col, title, hcol in [
-        (c1, "LAB",  "Hardness_LAB"),
-        (c2, "LINE", "Hardness_LINE")
-    ]:
-        with ax_col:
-            safe_range, hrb_table = find_safe_hrb_range(sub, hcol)
-
-            st.markdown(f"### 🔹 {title}")
-
-            if safe_range is None:
-                st.error("❌ No safe HRB range (100% PASS not found)")
-            else:
-                st.success(
-                    f"✅ SAFE HRB RANGE: **{safe_range[0]} – {safe_range[1]} HRB**"
+        st.markdown("## 📐 Hardness Safe Range (100% Mechanical PASS)")
+        st.caption("Bin = 1 HRB | Rule: 1 NG → FAIL (QA Strict)")
+    
+        c1, c2 = st.columns(2)
+    
+        for ax_col, title, hcol in [
+            (c1, "LAB",  "Hardness_LAB"),
+            (c2, "LINE", "Hardness_LINE")
+        ]:
+            with ax_col:
+                safe_range, hrb_table = find_safe_hrb_range(sub, hcol)
+    
+                st.markdown(f"### 🔹 {title}")
+    
+                if safe_range is None:
+                    st.error("❌ No safe HRB range (100% PASS not found)")
+                else:
+                    st.success(
+                        f"✅ SAFE HRB RANGE: **{safe_range[0]} – {safe_range[1]} HRB**"
+                    )
+    
+                # ===== TABLE =====
+                st.dataframe(
+                    hrb_table.rename(
+                        columns={
+                            "HRB_BIN": "HRB",
+                            "PASS": "100% MECH PASS"
+                        }
+                    ),
+                    use_container_width=True
                 )
-
-            # ===== TABLE =====
-            st.dataframe(
-                hrb_table.rename(
-                    columns={
-                        "HRB_BIN": "HRB",
-                        "PASS": "100% MECH PASS"
-                    }
-                ),
-                use_container_width=True
-            )
-
-            # ===== BAR CHART =====
-            fig, ax = plt.subplots(figsize=(5,3))
-            ax.bar(
-                hrb_table["HRB_BIN"],
-                hrb_table["PASS"].astype(int)
-            )
-            ax.set_yticks([0, 1])
-            ax.set_yticklabels(["FAIL", "PASS"])
-            ax.set_xlabel("HRB (bin = 1)")
-            ax.set_title(f"{title} HRB Safety Result")
-            ax.grid(alpha=0.3)
-
-            st.pyplot(fig)
-
-            st.download_button(
-                f"⬇️ Download {title} HRB Safety Chart",
-                data=fig_to_png(fig),
-                file_name=f"{spec}_{title}_HRB_safety.png",
-                mime="image/png",
-                key=f"dl_hrb_safe_{title}_{spec}_{gauge}"
-            )
+    
+                # ===== BAR CHART =====
+                fig, ax = plt.subplots(figsize=(5,3))
+                ax.bar(
+                    hrb_table["HRB_BIN"],
+                    hrb_table["PASS"].astype(int)
+                )
+                ax.set_yticks([0, 1])
+                ax.set_yticklabels(["FAIL", "PASS"])
+                ax.set_xlabel("HRB (bin = 1)")
+                ax.set_title(f"{title} HRB Safety Result")
+                ax.grid(alpha=0.3)
+    
+                st.pyplot(fig)
+    
+                st.download_button(
+                    f"⬇️ Download {title} HRB Safety Chart",
+                    data=fig_to_png(fig),
+                    file_name=f"{spec}_{title}_HRB_safety.png",
+                    mime="image/png",
+                    key=f"dl_hrb_safe_{title}_{spec}_{gauge}"
+                )
 
 
