@@ -1,37 +1,40 @@
 # ================================
-# FULL STREAMLIT APP – LOGIC CONFIRMED
-# - GIỮ NGUYÊN LOGIC QA STRICT (1 NG = FAIL)
-# - TÁCH BIỂU ĐỒ LAB / LINE
-# - KHÔNG VẼ HARDNESS = 0
-# - Y TICK STEP = 2.5 HRB
-# - LEGEND Ở NGOÀI BIỂU ĐỒ
-# - VIEW MODE: TABLE → TREND → DISTRIBUTION
+# FULL STREAMLIT APP – FINAL
 # ================================
 
 import streamlit as st
 import pandas as pd
 import numpy as np
 import requests
-from io import StringIO
+from io import StringIO, BytesIO
 import matplotlib.pyplot as plt
-from io import BytesIO
+
 # ================================
+# PAGE CONFIG
 # ================================
-# UTILITY FUNCTION
+st.set_page_config(page_title="Material-level Hardness Detail", layout="wide")
+st.title("📊 Material-level Hardness & Mechanical Detail")
+
+# ================================
+# UTILITY FUNCTIONS
 # ================================
 def fig_to_png(fig, dpi=200):
     buf = BytesIO()
     fig.savefig(buf, format="png", dpi=dpi, bbox_inches="tight")
     buf.seek(0)
     return buf
-# ================================
-# PAGE CONFIG
-# ================================
-st.set_page_config(page_title="Material-level Hardness Detail", layout="wide")
-st.title("📊 Material-level Hardness & Mechanical Detail (Offline only)")
+
+def plot_igf(ax, data, label):
+    mu = data.mean()
+    sigma = data.std(ddof=1)
+    if sigma <= 0:
+        return
+    x = np.linspace(data.min(), data.max(), 300)
+    y = (1 / (sigma * np.sqrt(2 * np.pi))) * np.exp(-0.5 * ((x - mu) / sigma) ** 2)
+    ax.plot(x, y, linestyle="--", linewidth=2, label=f"{label} IGF")
 
 # ================================
-# REFRESH BUTTON
+# REFRESH
 # ================================
 if st.sidebar.button("🔄 Refresh Data"):
     st.cache_data.clear()
@@ -51,7 +54,7 @@ def load_data(url):
 raw = load_data(DATA_URL)
 
 # ================================
-# FIND METALLIC TYPE COLUMN
+# METALLIC TYPE
 # ================================
 metal_col = None
 for c in raw.columns:
@@ -68,7 +71,7 @@ raw["Metallic_Type"] = raw[metal_col]
 # ================================
 # RENAME COLUMNS
 # ================================
-column_mapping = {
+df = raw.rename(columns={
     "PRODUCT SPECIFICATION CODE": "Product_Spec",
     "HR STEEL GRADE": "Material",
     "Claasify material": "Rolling_Type",
@@ -82,26 +85,10 @@ column_mapping = {
     "TENSILE_YIELD": "YS",
     "TENSILE_TENSILE": "TS",
     "TENSILE_ELONG": "EL",
-}
-
-df = raw.rename(columns={k: v for k, v in column_mapping.items() if k in raw.columns})
+})
 
 # ================================
-# CHECK REQUIRED COLUMNS
-# ================================
-required_cols = [
-    "Product_Spec","Material","Rolling_Type","Metallic_Type",
-    "Top_Coatmass","Order_Gauge","COIL_NO","Quality_Code",
-    "Std_Range_Text","Hardness_LAB","Hardness_LINE","YS","TS","EL"
-]
-
-missing = [c for c in required_cols if c not in df.columns]
-if missing:
-    st.error(f"❌ Missing columns: {missing}")
-    st.stop()
-
-# ================================
-# SPLIT STANDARD RANGE
+# SPLIT HARDNESS STANDARD
 # ================================
 def split_std(x):
     if isinstance(x, str) and "~" in x:
@@ -109,54 +96,47 @@ def split_std(x):
             lo, hi = x.split("~")
             return pd.Series([float(lo), float(hi)])
         except:
-            return pd.Series([np.nan, np.nan])
+            pass
     return pd.Series([np.nan, np.nan])
 
-df[["Std_Min","Std_Max"]] = df["Std_Range_Text"].apply(split_std)
-df.drop(columns=["Std_Range_Text"], inplace=True)
+df[["Std_Min", "Std_Max"]] = df["Std_Range_Text"].apply(split_std)
 
 # ================================
 # FORCE NUMERIC
 # ================================
-for c in ["Hardness_LAB","Hardness_LINE","YS","TS","EL"]:
+for c in ["Hardness_LAB", "Hardness_LINE", "YS", "TS", "EL"]:
     df[c] = pd.to_numeric(df[c], errors="coerce")
 
 # ================================
 # SIDEBAR FILTERS
 # ================================
-st.sidebar.header("🎛 FILTERS")
+st.sidebar.header("🎛 Filters")
 
-rolling = st.sidebar.radio("Rolling Type", sorted(df["Rolling_Type"].dropna().unique()))
-df = df[df["Rolling_Type"] == rolling]
+df = df[df["Rolling_Type"] == st.sidebar.radio("Rolling Type", sorted(df["Rolling_Type"].dropna().unique()))]
+df = df[df["Metallic_Type"] == st.sidebar.radio("Metallic Coating", sorted(df["Metallic_Type"].dropna().unique()))]
+df = df[df["Quality_Code"] == st.sidebar.radio("Quality Code", sorted(df["Quality_Code"].dropna().unique()))]
 
-metal = st.sidebar.radio("Metallic Coating", sorted(df["Metallic_Type"].dropna().unique()))
-df = df[df["Metallic_Type"] == metal]
-
-qc = st.sidebar.radio("Quality Code", sorted(df["Quality_Code"].dropna().unique()))
-df = df[df["Quality_Code"] == qc]
-
-# ================================
-# VIEW MODE
-# ================================
 view_mode = st.sidebar.radio(
     "📊 View Mode",
-    ["📋 Data Table","📈 Trend (LAB / LINE)","📊 Distribution"],
-    index=0
+    [
+        "📋 Data Table",
+        "📈 Trend (LAB / LINE)",
+        "📊 Distribution",
+        "📐 Hardness Safety Analysis"
+    ]
 )
-st.write("DEBUG view_mode =", view_mode)
 
 # ================================
 # GROUP CONDITION (≥30 COILS)
 # ================================
-GROUP_COLS = ["Product_Spec","Material","Metallic_Type","Top_Coatmass","Order_Gauge"]
+GROUP_COLS = ["Product_Spec", "Material", "Metallic_Type", "Top_Coatmass", "Order_Gauge"]
 
-count_df = (
+valid_conditions = (
     df.groupby(GROUP_COLS)
-      .agg(N_Coils=("COIL_NO","nunique"))
+      .agg(N_Coils=("COIL_NO", "nunique"))
       .reset_index()
+      .query("N_Coils >= 30")
 )
-
-valid_conditions = count_df[count_df["N_Coils"] >= 30]
 
 if valid_conditions.empty:
     st.warning("⚠️ No condition with ≥ 30 coils")
@@ -168,8 +148,11 @@ if valid_conditions.empty:
 for _, cond in valid_conditions.iterrows():
 
     spec, mat, coat, gauge, n = (
-        cond["Product_Spec"], cond["Material"], cond["Top_Coatmass"],
-        cond["Order_Gauge"], int(cond["N_Coils"])
+        cond["Product_Spec"],
+        cond["Material"],
+        cond["Top_Coatmass"],
+        cond["Order_Gauge"],
+        int(cond["N_Coils"])
     )
 
     sub = df[
@@ -177,64 +160,24 @@ for _, cond in valid_conditions.iterrows():
         (df["Material"] == mat) &
         (df["Top_Coatmass"] == coat) &
         (df["Order_Gauge"] == gauge)
-    ].copy().sort_values("COIL_NO").reset_index(drop=True)
+    ].copy()
 
-    lo, hi = sub[["Std_Min","Std_Max"]].iloc[0]
-# ===== PASS / FAIL cơ tính =====
-sub["YS_PASS"] = (
-    (sub["YS"] >= sub["Standard_YS_Min"]) &
-    (sub["YS"] <= sub["Standard_YS_Max"])
-)
+    lo, hi = sub[["Std_Min", "Std_Max"]].iloc[0]
 
-sub["TS_PASS"] = (
-    (sub["TS"] >= sub["Standard_TS_Min"]) &
-    (sub["TS"] <= sub["Standard_TS_Max"])
-)
-
-sub["EL_PASS"] = (
-    (sub["EL"] >= sub["Standard_EL_Min"]) &
-    (sub["EL"] <= sub["Standard_EL_Max"])
-)
-
-sub["MECH_PASS"] = sub["YS_PASS"] & sub["TS_PASS"] & sub["EL_PASS"]
-
-    # ===== QA STRICT LOGIC (KHÔNG ĐỔI) =====
-    sub["NG_LAB"]  = (sub["Hardness_LAB"]  < lo) | (sub["Hardness_LAB"]  > hi)
-    sub["NG_LINE"] = (sub["Hardness_LINE"] < lo) | (sub["Hardness_LINE"] > hi)
-    sub["COIL_NG"] = sub["NG_LAB"] | sub["NG_LINE"]
-
-    n_out = sub[sub["COIL_NG"]]["COIL_NO"].nunique()
-    qa_result = "FAIL" if n_out > 0 else "PASS"
+    lab_df  = sub[sub["Hardness_LAB"]  > 0]
+    line_df = sub[sub["Hardness_LINE"] > 0]
 
     st.markdown(
         f"## 🧱 `{spec}`  \n"
         f"Material: **{mat}** | Coatmass: **{coat}** | Gauge: **{gauge}**  \n"
-        f"➡️ n = **{n} coils** | ❌ Out = **{n_out}** | 🧪 **{qa_result}**"
+        f"➡️ n = **{n} coils**"
     )
 
     # ================================
-     # ================================
-    # VIEW 1 — DATA TABLE
+    # VIEW 1 — TABLE
     # ================================
     if view_mode == "📋 Data Table":
-
-        show_cols = [
-            "COIL_NO",
-            "Std_Min", "Std_Max",
-            "Hardness_LAB", "Hardness_LINE",
-            "NG_LAB", "NG_LINE",
-            "YS", "TS", "EL",
-            "Standard_YS_Min", "Standard_YS_Max",
-            "Standard_TS_Min", "Standard_TS_Max",
-            "Standard_EL_Min", "Standard_EL_Max",
-        ]
-
-        show_cols = [c for c in show_cols if c in sub.columns]
-
-        st.dataframe(
-            sub[show_cols].sort_values("COIL_NO"),
-            use_container_width=True
-        )
+        st.dataframe(sub.sort_values("COIL_NO"), use_container_width=True)
 
     # ================================
     # VIEW 2 — TREND
@@ -243,238 +186,84 @@ sub["MECH_PASS"] = sub["YS_PASS"] & sub["TS_PASS"] & sub["EL_PASS"]
 
         sub["X"] = np.arange(1, len(sub) + 1)
 
-        lab_df  = sub[sub["Hardness_LAB"]  > 0]
-        line_df = sub[sub["Hardness_LINE"] > 0]
-
-        y_min = np.floor(min(lo, lab_df["Hardness_LAB"].min(), line_df["Hardness_LINE"].min()))
-        y_max = np.ceil (max(hi, lab_df["Hardness_LAB"].max(), line_df["Hardness_LINE"].max()))
-
         c1, c2 = st.columns(2)
 
-        with c1:
-            fig, ax = plt.subplots(figsize=(5,3))
-            ax.plot(lab_df["X"], lab_df["Hardness_LAB"], marker="o")
-            ax.axhline(lo, linestyle="--")
-            ax.axhline(hi, linestyle="--")
-            ax.set_ylim(y_min, y_max)
-            ax.set_yticks(np.arange(y_min, y_max+0.01, 2.5))
-            ax.set_title("Hardness LAB")
-            ax.grid(alpha=0.3)
-            st.pyplot(fig)
-            img = fig_to_png(fig)
-            st.download_button(
-            "⬇️ Download LAB Trend",
-            data=img,
-            file_name=f"{spec}_LAB_trend.png",
-            mime="image/png",
-            key=f"dl_lab_{spec}_{mat}_{gauge}_{coat}"
-            )
+        for title, df_plot, col, label in [
+            ("LAB", lab_df, "Hardness_LAB", "lab"),
+            ("LINE", line_df, "Hardness_LINE", "line")
+        ]:
+            with c1 if title == "LAB" else c2:
+                fig, ax = plt.subplots(figsize=(5,3))
+                ax.plot(df_plot["X"], df_plot[col], marker="o")
+                ax.axhline(lo, linestyle="--")
+                ax.axhline(hi, linestyle="--")
+                ax.set_title(f"Hardness {title}")
+                ax.grid(alpha=0.3)
+                st.pyplot(fig)
+                st.download_button(
+                    f"⬇️ Download {title} Trend",
+                    data=fig_to_png(fig),
+                    file_name=f"{spec}_{title}_trend.png",
+                    mime="image/png",
+                    key=f"dl_{label}_{spec}_{gauge}"
+                )
 
-        with c2:
-            fig, ax = plt.subplots(figsize=(5,3))
-            ax.plot(line_df["X"], line_df["Hardness_LINE"], marker="o")
-            ax.axhline(lo, linestyle="--")
-            ax.axhline(hi, linestyle="--")
-            ax.set_ylim(y_min, y_max)
-            ax.set_yticks(np.arange(y_min, y_max+0.01, 2.5))
-            ax.set_title("Hardness LINE")
-            ax.grid(alpha=0.3)
-            st.pyplot(fig)
-            img = fig_to_png(fig)
-            st.download_button(
-            "⬇️ Download LINE Trend",
-            data=img,
-            file_name=f"{spec}_LINE_trend.png",
-            mime="image/png",
-            key=f"dl_line_{spec}_{mat}_{gauge}_{coat}"
-            )
-
-
-    # ================================
     # ================================
     # VIEW 3 — DISTRIBUTION
     # ================================
     elif view_mode == "📊 Distribution":
-    
-        # ===== FILTER DATA =====
-        lab_df  = sub[sub["Hardness_LAB"]  > 0]
-        line_df = sub[sub["Hardness_LINE"] > 0]
-    
-        # ===== STATISTIC =====
-        mu_lab   = lab_df["Hardness_LAB"].mean()
-        std_lab  = lab_df["Hardness_LAB"].std()
-    
-        mu_line  = line_df["Hardness_LINE"].mean()
-        std_line = line_df["Hardness_LINE"].std()
-    
-        # ===== FIGURE =====
-        fig, ax = plt.subplots(figsize=(6, 4))
-    
-        # ===== HISTOGRAM =====
-        lab_counts, lab_bins, _ = ax.hist(
-            lab_df["Hardness_LAB"],
-            bins=10,
-            alpha=0.5,
-            label="LAB",
-            edgecolor="black"
-        )
-    
-        line_counts, line_bins, _ = ax.hist(
-            line_df["Hardness_LINE"],
-            bins=10,
-            alpha=0.5,
-            label="LINE",
-            edgecolor="black"
-        )
-    
-        # ===== NORMAL CURVE LAB (±3σ) =====
-        if std_lab > 0:
-            x_lab = np.linspace(mu_lab - 3*std_lab, mu_lab + 3*std_lab, 400)
-            pdf_lab = (1/(std_lab*np.sqrt(2*np.pi))) * np.exp(
-                -0.5 * ((x_lab - mu_lab) / std_lab) ** 2
-            )
-    
-            ax.plot(
-                x_lab,
-                pdf_lab * len(lab_df) * (lab_bins[1] - lab_bins[0]),
-                linestyle="--",
-                linewidth=2,
-                label="LAB Normal"
-            )
-    
-        # ===== NORMAL CURVE LINE (±3σ) =====
-        if std_line > 0:
-            x_line = np.linspace(mu_line - 3*std_line, mu_line + 3*std_line, 400)
-            pdf_line = (1/(std_line*np.sqrt(2*np.pi))) * np.exp(
-                -0.5 * ((x_line - mu_line) / std_line) ** 2
-            )
-    
-            ax.plot(
-                x_line,
-                pdf_line * len(line_df) * (line_bins[1] - line_bins[0]),
-                linestyle="--",
-                linewidth=2,
-                label="LINE Normal"
-            )
-    
-        # ===== SPEC LIMIT =====
-        ax.axvline(lo, linestyle="--", linewidth=1, label="LSL")
-        ax.axvline(hi, linestyle="--", linewidth=1, label="USL")
-    
-        # ===== STAT TEXT (OUTSIDE PLOT) =====
-        stat_text = (
-            f"LAB  : μ = {mu_lab:.2f}, σ = {std_lab:.2f}\n"
-            f"LINE : μ = {mu_line:.2f}, σ = {std_line:.2f}"
-        )
-    
-        ax.text(
-            1.02, 0.98,
-            stat_text,
-            transform=ax.transAxes,
-            ha="left",
-            va="top",
-            fontsize=10,
-            bbox=dict(facecolor="white", alpha=0.85, edgecolor="none")
-        )
-    
-        # ===== FINAL STYLE =====
-        ax.set_title(f"{spec} | Hardness Distribution")
-        ax.set_xlabel("HRB")
-        ax.set_ylabel("Count")
-        ax.legend(bbox_to_anchor=(1.02, 0.5), loc="center left", frameon=False)
+
+        fig, ax = plt.subplots(figsize=(6,4))
+        ax.hist(lab_df["Hardness_LAB"], bins=10, alpha=0.5, label="LAB")
+        ax.hist(line_df["Hardness_LINE"], bins=10, alpha=0.5, label="LINE")
+        ax.axvline(lo, linestyle="--")
+        ax.axvline(hi, linestyle="--")
+        ax.legend()
         ax.grid(alpha=0.3)
-    
-        st.pyplot(fig)
-        img = fig_to_png(fig)
-        st.download_button(
-            "⬇️ Download Distribution Chart",
-            data=img,
-            file_name=f"{spec}_hardness_distribution.png",
-            mime="image/png",
-            key=f"dl_dist_{spec}_{mat}_{gauge}_{coat}"
-        )
-
-elif view_mode == "📐 Hardness Safety Analysis":
-
-    lab_df  = sub[sub["Hardness_LAB"]  > 0]
-    line_df = sub[sub["Hardness_LINE"] > 0]
-
-    st.markdown("## 📊 Hardness Distribution + IGF (Bin = 1 HRB)")
-
-    c1, c2 = st.columns(2)
-
-    # ===== LAB =====
-    with c1:
-        fig, ax = plt.subplots(figsize=(5,4))
-
-        ax.hist(
-            lab_df["Hardness_LAB"],
-            bins=np.arange(
-                np.floor(lab_df["Hardness_LAB"].min()),
-                np.ceil(lab_df["Hardness_LAB"].max()) + 1,
-                1
-            ),
-            density=True,
-            alpha=0.6,
-            edgecolor="black",
-            label="LAB"
-        )
-
-        plot_igf(ax, lab_df["Hardness_LAB"], "LAB")
-
-        ax.axvline(lo, linestyle="--", linewidth=1, label="LSL")
-        ax.axvline(hi, linestyle="--", linewidth=1, label="USL")
-
-        ax.set_title("LAB Hardness + IGF")
-        ax.set_xlabel("Hardness (HRB)")
-        ax.set_ylabel("Density")
-        ax.grid(alpha=0.3)
-        ax.legend(bbox_to_anchor=(1.02, 0.5), loc="center left", frameon=False)
-
         st.pyplot(fig)
 
         st.download_button(
-            "⬇️ Download LAB IGF",
+            "⬇️ Download Distribution",
             data=fig_to_png(fig),
-            file_name=f"{spec}_LAB_IGF.png",
+            file_name=f"{spec}_distribution.png",
             mime="image/png",
-            key=f"dl_lab_igf_{spec}_{mat}_{gauge}_{coat}"
+            key=f"dl_dist_{spec}_{gauge}"
         )
 
-    # ===== LINE =====
-    with c2:
-        fig, ax = plt.subplots(figsize=(5,4))
+    # ================================
+    # VIEW 4 — IGF (BIN = 1 HRB)
+    # ================================
+    elif view_mode == "📐 Hardness Safety Analysis":
 
-        ax.hist(
-            line_df["Hardness_LINE"],
-            bins=np.arange(
-                np.floor(line_df["Hardness_LINE"].min()),
-                np.ceil(line_df["Hardness_LINE"].max()) + 1,
-                1
-            ),
-            density=True,
-            alpha=0.6,
-            edgecolor="black",
-            label="LINE"
-        )
+        st.markdown("### 📊 Hardness Distribution + IGF (Bin = 1 HRB)")
 
-        plot_igf(ax, line_df["Hardness_LINE"], "LINE")
+        c1, c2 = st.columns(2)
 
-        ax.axvline(lo, linestyle="--", linewidth=1, label="LSL")
-        ax.axvline(hi, linestyle="--", linewidth=1, label="USL")
-
-        ax.set_title("LINE Hardness + IGF")
-        ax.set_xlabel("Hardness (HRB)")
-        ax.set_ylabel("Density")
-        ax.grid(alpha=0.3)
-        ax.legend(bbox_to_anchor=(1.02, 0.5), loc="center left", frameon=False)
-
-        st.pyplot(fig)
-
-        st.download_button(
-            "⬇️ Download LINE IGF",
-            data=fig_to_png(fig),
-            file_name=f"{spec}_LINE_IGF.png",
-            mime="image/png",
-            key=f"dl_line_igf_{spec}_{mat}_{gauge}_{coat}"
-        )
+        for title, df_plot, col, label in [
+            ("LAB", lab_df, "Hardness_LAB", "lab"),
+            ("LINE", line_df, "Hardness_LINE", "line")
+        ]:
+            with c1 if title == "LAB" else c2:
+                fig, ax = plt.subplots(figsize=(5,4))
+                bins = np.arange(
+                    np.floor(df_plot[col].min()),
+                    np.ceil(df_plot[col].max()) + 1,
+                    1
+                )
+                ax.hist(df_plot[col], bins=bins, density=True, alpha=0.6, label=title)
+                plot_igf(ax, df_plot[col], title)
+                ax.axvline(lo, linestyle="--", label="LSL")
+                ax.axvline(hi, linestyle="--", label="USL")
+                ax.set_title(f"{title} Hardness + IGF")
+                ax.set_xlabel("HRB")
+                ax.set_ylabel("Density")
+                ax.legend()
+                ax.grid(alpha=0.3)
+                st.pyplot(fig)
+                st.download_button(
+                    f"⬇️ Download {title} IGF",
+                    data=fig_to_png(fig),
+                    file_name=f"{spec}_{title}_IGF.png",
+                    mime="image/png",
+                    key=f"dl_igf_{label}_{spec}_{gauge}"
+                )
