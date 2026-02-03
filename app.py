@@ -421,101 +421,102 @@ for _, cond in valid_conditions.iterrows():
             key=f"dl_dist_{spec}_{mat}_{gauge}_{coat}"
         )
 # ================================
- elif view_mode == "📐 Hardness Safety Analysis":
+    elif view_mode == "📐 Hardness Safety Analysis":
 
-    st.markdown("## 📐 Hardness Safety Analysis (Bin = 1 HRB)")
-    st.caption("🎯 SAFE = 100% PASS YS + TS + EL")
-
-    # ===== chỉ lấy coil PASS cơ tính =====
-    mech_ok = sub[sub["MECH_PASS"]].copy()
-
-    # ===== BIN 1 HRB =====
-    mech_ok["HRB_LAB_BIN"]  = mech_ok["Hardness_LAB"].round().astype("Int64")
-    mech_ok["HRB_LINE_BIN"] = mech_ok["Hardness_LINE"].round().astype("Int64")
-
-    c1, c2 = st.columns(2)
-
-    # ================= LAB =================
-    with c1:
-        st.markdown("### 🧪 LAB")
-
-        lab_bin = (
-            mech_ok
-            .groupby("HRB_LAB_BIN")
-            .agg(
-                n=("COIL_NO", "count"),
-                pass_rate=("MECH_PASS", "mean")
+        st.markdown("## 📐 Hardness Safety Analysis (Bin = 1 HRB)")
+        st.caption("🎯 SAFE = 100% PASS YS + TS + EL")
+    
+        # ===== chỉ lấy coil PASS cơ tính =====
+        mech_ok = sub[sub["MECH_PASS"]].copy()
+    
+        # ===== BIN 1 HRB =====
+        mech_ok["HRB_LAB_BIN"]  = mech_ok["Hardness_LAB"].round().astype("Int64")
+        mech_ok["HRB_LINE_BIN"] = mech_ok["Hardness_LINE"].round().astype("Int64")
+    
+        c1, c2 = st.columns(2)
+    
+        # ================= LAB =================
+        with c1:
+            st.markdown("### 🧪 LAB")
+    
+            lab_bin = (
+                mech_ok
+                .groupby("HRB_LAB_BIN")
+                .agg(
+                    n=("COIL_NO", "count"),
+                    pass_rate=("MECH_PASS", "mean")
+                )
+                .reset_index()
             )
-            .reset_index()
-        )
-
-        safe_lab = lab_bin[lab_bin["pass_rate"] == 1.0]
-
-        fig, ax = plt.subplots(figsize=(5,4))
-        ax.bar(lab_bin["HRB_LAB_BIN"], lab_bin["pass_rate"])
-        ax.axhline(1.0, linestyle="--")
-        ax.set_ylim(0, 1.05)
-        ax.set_xlabel("Hardness (HRB)")
-        ax.set_ylabel("Pass Rate")
-        ax.set_title("LAB – Mechanical Pass Rate by HRB (bin=1)")
-        ax.grid(alpha=0.3)
-
-        st.pyplot(fig)
-        st.download_button(
-            "⬇️ Download LAB Safety Chart",
-            data=fig_to_png(fig),
-            file_name=f"{spec}_LAB_safety.png",
-            mime="image/png",
-            key=f"dl_lab_safe_{spec}_{gauge}"
-        )
-
-        if not safe_lab.empty:
-            st.success(
-                f"✅ LAB SAFE HRB RANGE: "
-                f"{safe_lab['HRB_LAB_BIN'].min()} ~ {safe_lab['HRB_LAB_BIN'].max()}"
+    
+            safe_lab = lab_bin[lab_bin["pass_rate"] == 1.0]
+    
+            fig, ax = plt.subplots(figsize=(5,4))
+            ax.bar(lab_bin["HRB_LAB_BIN"], lab_bin["pass_rate"])
+            ax.axhline(1.0, linestyle="--")
+            ax.set_ylim(0, 1.05)
+            ax.set_xlabel("Hardness (HRB)")
+            ax.set_ylabel("Pass Rate")
+            ax.set_title("LAB – Mechanical Pass Rate by HRB (bin=1)")
+            ax.grid(alpha=0.3)
+    
+            st.pyplot(fig)
+            st.download_button(
+                "⬇️ Download LAB Safety Chart",
+                data=fig_to_png(fig),
+                file_name=f"{spec}_LAB_safety.png",
+                mime="image/png",
+                key=f"dl_lab_safe_{spec}_{gauge}"
             )
-        else:
-            st.error("❌ No LAB HRB range achieves 100% mechanical PASS")
-
-    # ================= LINE =================
-    with c2:
-        st.markdown("### 🏭 LINE")
-
-        line_bin = (
-            mech_ok
-            .groupby("HRB_LINE_BIN")
-            .agg(
-                n=("COIL_NO", "count"),
-                pass_rate=("MECH_PASS", "mean")
+    
+            if not safe_lab.empty:
+                st.success(
+                    f"✅ LAB SAFE HRB RANGE: "
+                    f"{safe_lab['HRB_LAB_BIN'].min()} ~ {safe_lab['HRB_LAB_BIN'].max()}"
+                )
+            else:
+                st.error("❌ No LAB HRB range achieves 100% mechanical PASS")
+    
+        # ================= LINE =================
+        with c2:
+            st.markdown("### 🏭 LINE")
+    
+            line_bin = (
+                mech_ok
+                .groupby("HRB_LINE_BIN")
+                .agg(
+                    n=("COIL_NO", "count"),
+                    pass_rate=("MECH_PASS", "mean")
+                )
+                .reset_index()
             )
-            .reset_index()
-        )
-
-        safe_line = line_bin[line_bin["pass_rate"] == 1.0]
-
-        fig, ax = plt.subplots(figsize=(5,4))
-        ax.bar(line_bin["HRB_LINE_BIN"], line_bin["pass_rate"])
-        ax.axhline(1.0, linestyle="--")
-        ax.set_ylim(0, 1.05)
-        ax.set_xlabel("Hardness (HRB)")
-        ax.set_ylabel("Pass Rate")
-        ax.set_title("LINE – Mechanical Pass Rate by HRB (bin=1)")
-        ax.grid(alpha=0.3)
-
-        st.pyplot(fig)
-        st.download_button(
-            "⬇️ Download LINE Safety Chart",
-            data=fig_to_png(fig),
-            file_name=f"{spec}_LINE_safety.png",
-            mime="image/png",
-            key=f"dl_line_safe_{spec}_{gauge}"
-        )
-
-        if not safe_line.empty:
-            st.success(
-                f"✅ LINE SAFE HRB RANGE: "
-                f"{safe_line['HRB_LINE_BIN'].min()} ~ {safe_line['HRB_LINE_BIN'].max()}"
+    
+            safe_line = line_bin[line_bin["pass_rate"] == 1.0]
+    
+            fig, ax = plt.subplots(figsize=(5,4))
+            ax.bar(line_bin["HRB_LINE_BIN"], line_bin["pass_rate"])
+            ax.axhline(1.0, linestyle="--")
+            ax.set_ylim(0, 1.05)
+            ax.set_xlabel("Hardness (HRB)")
+            ax.set_ylabel("Pass Rate")
+            ax.set_title("LINE – Mechanical Pass Rate by HRB (bin=1)")
+            ax.grid(alpha=0.3)
+    
+            st.pyplot(fig)
+            st.download_button(
+                "⬇️ Download LINE Safety Chart",
+                data=fig_to_png(fig),
+                file_name=f"{spec}_LINE_safety.png",
+                mime="image/png",
+                key=f"dl_line_safe_{spec}_{gauge}"
             )
-        else:
-            st.error("❌ No LINE HRB range achieves 100% mechanical PASS")
+    
+            if not safe_line.empty:
+                st.success(
+                    f"✅ LINE SAFE HRB RANGE: "
+                    f"{safe_line['HRB_LINE_BIN'].min()} ~ {safe_line['HRB_LINE_BIN'].max()}"
+                )
+            else:
+                st.error("❌ No LINE HRB range achieves 100% mechanical PASS")
 
+        
