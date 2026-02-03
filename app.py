@@ -139,9 +139,15 @@ df = df[df["Quality_Code"] == qc]
 # ================================
 view_mode = st.sidebar.radio(
     "📊 View Mode",
-    ["📋 Data Table","📈 Trend (LAB / LINE)","📊 Distribution"],
+    [
+        "📋 Data Table",
+        "📈 Trend (LAB / LINE)",
+        "📊 Distribution",
+        "📐 Hardness Safety Analysis"
+    ],
     index=0
 )
+
 st.write("DEBUG view_mode =", view_mode)
 
 # ================================
@@ -375,5 +381,73 @@ for _, cond in valid_conditions.iterrows():
             mime="image/png",
             key=f"dl_dist_{spec}_{mat}_{gauge}_{coat}"
         )
+    # ================================
+    # VIEW 4 — HARDNESS SAFETY ANALYSIS
+    # ================================
+    elif view_mode == "📐 Hardness Safety Analysis":
+
+        st.markdown("## 📐 Hardness Safety Analysis (Bin = 1 HRB)")
+        st.caption("🎯 SAFE = 100% PASS YS + TS + EL")
+
+        # ===== CHỈ GIỮ COIL CÓ ĐỦ DỮ LIỆU CƠ TÍNH =====
+        mech_df = sub.dropna(subset=["YS","TS","EL"]).copy()
+
+        # ===== LAB & LINE BIN =====
+        mech_df["HRB_LAB_BIN"]  = mech_df["Hardness_LAB"].round().astype("Int64")
+        mech_df["HRB_LINE_BIN"] = mech_df["Hardness_LINE"].round().astype("Int64")
+
+        c1, c2 = st.columns(2)
+
+        # ================= LAB =================
+        with c1:
+            st.markdown("### 🧪 LAB")
+
+            lab_bin = (
+                mech_df[mech_df["Hardness_LAB"] > 0]
+                .groupby("HRB_LAB_BIN")
+                .agg(n=("COIL_NO","count"))
+                .reset_index()
+            )
+
+            fig, ax = plt.subplots(figsize=(5,4))
+            ax.bar(lab_bin["HRB_LAB_BIN"], lab_bin["n"])
+            ax.set_xlabel("Hardness (HRB)")
+            ax.set_ylabel("Coil count")
+            ax.set_title("LAB – Coil distribution by HRB (bin=1)")
+            ax.grid(alpha=0.3)
+
+            st.pyplot(fig)
+
+            if not lab_bin.empty:
+                st.success(
+                    f"📌 LAB HRB observed range: "
+                    f"{lab_bin['HRB_LAB_BIN'].min()} ~ {lab_bin['HRB_LAB_BIN'].max()}"
+                )
+
+        # ================= LINE =================
+        with c2:
+            st.markdown("### 🏭 LINE")
+
+            line_bin = (
+                mech_df[mech_df["Hardness_LINE"] > 0]
+                .groupby("HRB_LINE_BIN")
+                .agg(n=("COIL_NO","count"))
+                .reset_index()
+            )
+
+            fig, ax = plt.subplots(figsize=(5,4))
+            ax.bar(line_bin["HRB_LINE_BIN"], line_bin["n"])
+            ax.set_xlabel("Hardness (HRB)")
+            ax.set_ylabel("Coil count")
+            ax.set_title("LINE – Coil distribution by HRB (bin=1)")
+            ax.grid(alpha=0.3)
+
+            st.pyplot(fig)
+
+            if not line_bin.empty:
+                st.success(
+                    f"📌 LINE HRB observed range: "
+                    f"{line_bin['HRB_LINE_BIN'].min()} ~ {line_bin['HRB_LINE_BIN'].max()}"
+                )
 
 
