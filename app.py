@@ -384,110 +384,110 @@ for _, cond in valid_conditions.iterrows():
     # ================================
         # ================================
     # ================================
-# VIEW 4 — HARDNESS OPTIMAL RANGE (IQR)
-# ================================
-elif view_mode == "📐 Hardness Safety Analysis":
-
-    st.markdown("## 📐 Hardness Optimal Range (IQR-based)")
-    st.caption("🎯 Process-based optimization (LAB & LINE independent)")
-
-    def iqr_analysis(df, col):
-        x = df[col].dropna()
-        x = x[x > 0]
-
-        if len(x) < 5:
-            return None
-
-        q1 = x.quantile(0.25)
-        q3 = x.quantile(0.75)
-        iqr = q3 - q1
-
-        lo_ext = q1 - 1.5 * iqr
-        hi_ext = q3 + 1.5 * iqr
-
-        return {
-            "data": x,
-            "Q1": q1,
-            "Q3": q3,
-            "IQR": iqr,
-            "CORE": (q1, q3),
-            "EXT": (lo_ext, hi_ext)
-        }
-
-    c1, c2 = st.columns(2)
-
-    # ================= LAB =================
-    with c1:
-        st.markdown("### 🧪 LAB")
-
-        res = iqr_analysis(sub, "Hardness_LAB")
-
-        if res is None:
-            st.warning("Not enough LAB data")
-        else:
-            x = res["data"]
-            q1, q3 = res["Q1"], res["Q3"]
-            lo, hi = res["EXT"]
-
-            fig, ax = plt.subplots(figsize=(5,4))
-            ax.hist(x, bins=20, alpha=0.7)
-            ax.axvline(q1, linestyle="--", label="Q1")
-            ax.axvline(q3, linestyle="--", label="Q3")
-            ax.axvspan(q1, q3, alpha=0.2, label="CORE")
-            ax.set_title("LAB Hardness Distribution")
-            ax.set_xlabel("HRB")
-            ax.set_ylabel("Count")
-            ax.legend()
-            ax.grid(alpha=0.3)
-
-            st.pyplot(fig)
-
-            core_width = q3 - q1
-            outlier_rate = ((x < lo) | (x > hi)).mean()
-
-            st.info(f"🟢 CORE RANGE: {q1:.1f} ~ {q3:.1f} HRB")
-
-            if core_width >= 3 and outlier_rate <= 0.1:
-                st.success("✅ LAB Process Stable")
-            elif core_width < 3:
-                st.warning("⚠️ LAB CORE range too narrow")
+    # VIEW 4 — HARDNESS OPTIMAL RANGE (IQR)
+    # ================================
+    elif view_mode == "📐 Hardness Safety Analysis":
+    
+        st.markdown("## 📐 Hardness Optimal Range (IQR-based)")
+        st.caption("🎯 Process-based optimization (LAB & LINE independent)")
+    
+        def iqr_analysis(df, col):
+            x = df[col].dropna()
+            x = x[x > 0]
+    
+            if len(x) < 5:
+                return None
+    
+            q1 = x.quantile(0.25)
+            q3 = x.quantile(0.75)
+            iqr = q3 - q1
+    
+            lo_ext = q1 - 1.5 * iqr
+            hi_ext = q3 + 1.5 * iqr
+    
+            return {
+                "data": x,
+                "Q1": q1,
+                "Q3": q3,
+                "IQR": iqr,
+                "CORE": (q1, q3),
+                "EXT": (lo_ext, hi_ext)
+            }
+    
+        c1, c2 = st.columns(2)
+    
+        # ================= LAB =================
+        with c1:
+            st.markdown("### 🧪 LAB")
+    
+            res = iqr_analysis(sub, "Hardness_LAB")
+    
+            if res is None:
+                st.warning("Not enough LAB data")
             else:
-                st.error("❌ LAB Process Unstable (many outliers)")
-
-    # ================= LINE =================
-    with c2:
-        st.markdown("### 🏭 LINE")
-
-        res = iqr_analysis(sub, "Hardness_LINE")
-
-        if res is None:
-            st.warning("Not enough LINE data")
-        else:
-            x = res["data"]
-            q1, q3 = res["Q1"], res["Q3"]
-            lo, hi = res["EXT"]
-
-            fig, ax = plt.subplots(figsize=(5,4))
-            ax.hist(x, bins=20, alpha=0.7)
-            ax.axvline(q1, linestyle="--", label="Q1")
-            ax.axvline(q3, linestyle="--", label="Q3")
-            ax.axvspan(q1, q3, alpha=0.2, label="CORE")
-            ax.set_title("LINE Hardness Distribution")
-            ax.set_xlabel("HRB")
-            ax.set_ylabel("Count")
-            ax.legend()
-            ax.grid(alpha=0.3)
-
-            st.pyplot(fig)
-
-            core_width = q3 - q1
-            outlier_rate = ((x < lo) | (x > hi)).mean()
-
-            st.info(f"🟢 CORE RANGE: {q1:.1f} ~ {q3:.1f} HRB")
-
-            if core_width >= 3 and outlier_rate <= 0.1:
-                st.success("✅ LINE Process Stable")
-            elif core_width < 3:
-                st.warning("⚠️ LINE CORE range too narrow")
+                x = res["data"]
+                q1, q3 = res["Q1"], res["Q3"]
+                lo, hi = res["EXT"]
+    
+                fig, ax = plt.subplots(figsize=(5,4))
+                ax.hist(x, bins=20, alpha=0.7)
+                ax.axvline(q1, linestyle="--", label="Q1")
+                ax.axvline(q3, linestyle="--", label="Q3")
+                ax.axvspan(q1, q3, alpha=0.2, label="CORE")
+                ax.set_title("LAB Hardness Distribution")
+                ax.set_xlabel("HRB")
+                ax.set_ylabel("Count")
+                ax.legend()
+                ax.grid(alpha=0.3)
+    
+                st.pyplot(fig)
+    
+                core_width = q3 - q1
+                outlier_rate = ((x < lo) | (x > hi)).mean()
+    
+                st.info(f"🟢 CORE RANGE: {q1:.1f} ~ {q3:.1f} HRB")
+    
+                if core_width >= 3 and outlier_rate <= 0.1:
+                    st.success("✅ LAB Process Stable")
+                elif core_width < 3:
+                    st.warning("⚠️ LAB CORE range too narrow")
+                else:
+                    st.error("❌ LAB Process Unstable (many outliers)")
+    
+        # ================= LINE =================
+        with c2:
+            st.markdown("### 🏭 LINE")
+    
+            res = iqr_analysis(sub, "Hardness_LINE")
+    
+            if res is None:
+                st.warning("Not enough LINE data")
             else:
-                st.error("❌ LINE Process Unstable (many outliers)")
+                x = res["data"]
+                q1, q3 = res["Q1"], res["Q3"]
+                lo, hi = res["EXT"]
+    
+                fig, ax = plt.subplots(figsize=(5,4))
+                ax.hist(x, bins=20, alpha=0.7)
+                ax.axvline(q1, linestyle="--", label="Q1")
+                ax.axvline(q3, linestyle="--", label="Q3")
+                ax.axvspan(q1, q3, alpha=0.2, label="CORE")
+                ax.set_title("LINE Hardness Distribution")
+                ax.set_xlabel("HRB")
+                ax.set_ylabel("Count")
+                ax.legend()
+                ax.grid(alpha=0.3)
+    
+                st.pyplot(fig)
+    
+                core_width = q3 - q1
+                outlier_rate = ((x < lo) | (x > hi)).mean()
+    
+                st.info(f"🟢 CORE RANGE: {q1:.1f} ~ {q3:.1f} HRB")
+    
+                if core_width >= 3 and outlier_rate <= 0.1:
+                    st.success("✅ LINE Process Stable")
+                elif core_width < 3:
+                    st.warning("⚠️ LINE CORE range too narrow")
+                else:
+                    st.error("❌ LINE Process Unstable (many outliers)")
