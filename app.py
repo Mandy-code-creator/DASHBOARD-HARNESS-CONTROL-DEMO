@@ -459,3 +459,43 @@ for _, cond in valid_conditions.iterrows():
                 st.success(
                     f"✅ LINE Optimal HRB (IQR): **{lo_iqr:.1f} ~ {hi_iqr:.1f}**"
                 )
+# ===== SPEC =====
+spec_lo = sub["Std_Min"].iloc[0]
+spec_hi = sub["Std_Max"].iloc[0]
+
+# ===== OVERLAP WITH SPEC =====
+safe_lo = max(L_opt, spec_lo)
+safe_hi = min(U_opt, spec_hi)
+
+st.markdown("### 🔍 Optimal Range vs Specification")
+
+st.write(
+    f"- **SPEC:** {spec_lo:.1f} ~ {spec_hi:.1f} HRB  \n"
+    f"- **OPTIMAL:** {L_opt:.1f} ~ {U_opt:.1f} HRB"
+)
+
+# ===== DECISION LOGIC =====
+if L_opt < U_opt:
+    if safe_lo < safe_hi:
+        target = (safe_lo + safe_hi) / 2
+
+        st.success(
+            f"✅ OPTIMAL nằm trong SPEC  \n"
+            f"🎯 **Recommended Target HRB:** **{target:.1f}**"
+        )
+
+    else:
+        target = (L_opt + U_opt) / 2
+
+        st.warning(
+            f"⚠️ OPTIMAL lệch khỏi SPEC  \n"
+            f"🎯 Target theo process: **{target:.1f}**  \n"
+            f"❗ Rủi ro QA – cần điều chỉnh process"
+        )
+else:
+    target = (spec_lo + spec_hi) / 2
+
+    st.error(
+        f"❌ Không xác định được OPTIMAL RANGE  \n"
+        f"🎯 Tạm dùng Target theo SPEC: **{target:.1f}**"
+    )
