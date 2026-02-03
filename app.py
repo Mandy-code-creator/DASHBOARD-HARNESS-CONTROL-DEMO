@@ -79,7 +79,7 @@ if st.sidebar.button("🔄 Refresh Data"):
 # LOAD DATA
 # ================================
 DATA_URL = "https://docs.google.com/spreadsheets/d/1GdnY09hJ2qVHuEBAIJ-eU6B5z8ZdgcGf4P7ZjlAt4JI/export?format=csv"
-
+df = pd.read_csv(DATA_URL)
 @st.cache_data
 def load_data(url):
     r = requests.get(url)
@@ -114,15 +114,35 @@ column_mapping = {
     "ORDER GAUGE": "Order_Gauge",
     "COIL NO": "COIL_NO",
     "QUALITY_CODE": "Quality_Code",
+
     "Standard Hardness": "Std_Range_Text",
+
     "HARDNESS 冶金": "Hardness_LAB",
     "HARDNESS 鍍鋅線 C": "Hardness_LINE",
+
     "TENSILE_YIELD": "YS",
     "TENSILE_TENSILE": "TS",
     "TENSILE_ELONG": "EL",
+
+    # 🔴 CÁC CỘT STANDARD CƠ TÍNH (PHẢI CÓ)
+    "Standard_YS_Min": "Standard_YS_Min",
+    "Standard_YS_Max": "Standard_YS_Max",
+    "Standard_TS_Min": "Standard_TS_Min",
+    "Standard_TS_Max": "Standard_TS_Max",
+    "Standard_EL_Min": "Standard_EL_Min",
 }
+df = df.rename(columns=column_mapping)
 
 df = raw.rename(columns={k: v for k, v in column_mapping.items() if k in raw.columns})
+for c in [
+    "Hardness_LAB", "Hardness_LINE",
+    "YS", "TS", "EL",
+    "Standard_YS_Min", "Standard_YS_Max",
+    "Standard_TS_Min", "Standard_TS_Max",
+    "Standard_EL_Min",
+]:
+    if c in df.columns:
+        df[c] = pd.to_numeric(df[c], errors="coerce")
 
 # ================================
 # CHECK REQUIRED COLUMNS
@@ -224,6 +244,36 @@ for _, cond in valid_conditions.iterrows():
     ].copy().sort_values("COIL_NO").reset_index(drop=True)
 
     lo, hi = sub[["Std_Min","Std_Max"]].iloc[0]
+    st.write("DEBUG sub columns:", sub.columns.tolist())
+
+# ================================
+# MECHANICAL STANDARD (YS / TS / EL)
+# ================================
+required_cols = [
+    "Standard_YS_Min", "Standard_YS_Max",
+    "Standard_TS_Min", "Standard_TS_Max",
+    "Standard_EL_Min"
+]
+
+missing = [c for c in required_cols if c not in sub.columns]
+if missing:
+    st.warning(f"⚠️ Missing mechanical standard columns: {missing}")
+    continue   # bỏ condition này, không crash app
+
+ys_lo = sub["Standard_YS_Min"].iloc[0]
+ys_hi = sub["Standard_YS_Max"].iloc[0]
+
+ts_lo = sub["Standard_TS_Min"].iloc[0]
+ts_hi = sub["Standard_TS_Max"].iloc[0]
+
+el_lo = sub["Standard_EL_Min"].iloc[0]
+sub["MECH_PASS"] = (
+    (sub["YS"] >= ys_lo) & (sub["YS"] <= ys_hi) &
+    (sub["TS"] >= ts_lo) & (sub["TS"] <= ts_hi) &
+    (sub["EL"] >= el_lo)
+)
+mech_ok = sub[sub["MECH_PASS"]].copy()
+mech_ng = sub[~sub["MECH_PASS"]].copy()
 
     # ===== QA STRICT LOGIC (KHÔNG ĐỔI) =====
     sub["NG_LAB"]  = (sub["Hardness_LAB"]  < lo) | (sub["Hardness_LAB"]  > hi)
