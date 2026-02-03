@@ -147,6 +147,14 @@ view_mode = st.sidebar.radio(
     ],
     index=0
 )
+if view_mode == "📐 Hardness Optimal Range (IQR)":
+    K = st.sidebar.slider(
+        "IQR Multiplier (K)",
+        min_value=0.5,
+        max_value=3.0,
+        value=1.5,
+        step=0.1
+    )
 
 st.write("DEBUG view_mode =", view_mode)
 
@@ -384,110 +392,75 @@ for _, cond in valid_conditions.iterrows():
     # ================================
         # ================================
     # ================================
+    # ================================
     # VIEW 4 — HARDNESS OPTIMAL RANGE (IQR)
     # ================================
-    elif view_mode == "📐 Hardness Safety Analysis":
+    elif view_mode == "📐 Hardness Optimal Range (IQR)":
     
-        st.markdown("## 📐 Hardness Optimal Range (IQR-based)")
-        st.caption("🎯 Process-based optimization (LAB & LINE independent)")
+        st.markdown("## 📐 Hardness Optimal Range by IQR")
+        st.caption("📌 LAB | LINE analyzed separately – IQR based (adjustable K)")
     
-        def iqr_analysis(df, col):
-            x = df[col].dropna()
-            x = x[x > 0]
-    
-            if len(x) < 5:
-                return None
-    
-            q1 = x.quantile(0.25)
-            q3 = x.quantile(0.75)
-            iqr = q3 - q1
-    
-            lo_ext = q1 - 1.5 * iqr
-            hi_ext = q3 + 1.5 * iqr
-    
-            return {
-                "data": x,
-                "Q1": q1,
-                "Q3": q3,
-                "IQR": iqr,
-                "CORE": (q1, q3),
-                "EXT": (lo_ext, hi_ext)
-            }
+        lab_df  = sub[sub["Hardness_LAB"]  > 0]
+        line_df = sub[sub["Hardness_LINE"] > 0]
     
         c1, c2 = st.columns(2)
     
-        # ================= LAB =================
+        def iqr_range(series, K):
+            q1 = series.quantile(0.25)
+            q3 = series.quantile(0.75)
+            iqr = q3 - q1
+            return q1 - K * iqr, q3 + K * iqr, q1, q3
+    
+        # ===== LAB =====
         with c1:
             st.markdown("### 🧪 LAB")
     
-            res = iqr_analysis(sub, "Hardness_LAB")
-    
-            if res is None:
-                st.warning("Not enough LAB data")
+            if len(lab_df) < 5:
+                st.warning("Not enough LAB data for IQR analysis")
             else:
-                x = res["data"]
-                q1, q3 = res["Q1"], res["Q3"]
-                lo, hi = res["EXT"]
+                lo_iqr, hi_iqr, q1, q3 = iqr_range(lab_df["Hardness_LAB"], K)
     
-                fig, ax = plt.subplots(figsize=(5,4))
-                ax.hist(x, bins=20, alpha=0.7)
-                ax.axvline(q1, linestyle="--", label="Q1")
-                ax.axvline(q3, linestyle="--", label="Q3")
-                ax.axvspan(q1, q3, alpha=0.2, label="CORE")
-                ax.set_title("LAB Hardness Distribution")
+                fig, ax = plt.subplots(figsize=(5,3))
+                ax.hist(lab_df["Hardness_LAB"], bins=10, edgecolor="black", alpha=0.7)
+                ax.axvline(lo_iqr, linestyle="--", label="IQR Lower")
+                ax.axvline(hi_iqr, linestyle="--", label="IQR Upper")
+                ax.axvline(lo, linestyle=":", label="Std Min")
+                ax.axvline(hi, linestyle=":", label="Std Max")
+                ax.set_title("LAB – Optimal Hardness Range (IQR)")
                 ax.set_xlabel("HRB")
-                ax.set_ylabel("Count")
-                ax.legend()
+                ax.legend(bbox_to_anchor=(1.02,0.5), loc="center left", frameon=False)
                 ax.grid(alpha=0.3)
     
                 st.pyplot(fig)
     
-                core_width = q3 - q1
-                outlier_rate = ((x < lo) | (x > hi)).mean()
+                st.success(
+                    f"✅ LAB Optimal HRB Range (K={K}): "
+                    f"{lo_iqr:.1f} ~ {hi_iqr:.1f}"
+                )
     
-                st.info(f"🟢 CORE RANGE: {q1:.1f} ~ {q3:.1f} HRB")
-    
-                if core_width >= 3 and outlier_rate <= 0.1:
-                    st.success("✅ LAB Process Stable")
-                elif core_width < 3:
-                    st.warning("⚠️ LAB CORE range too narrow")
-                else:
-                    st.error("❌ LAB Process Unstable (many outliers)")
-    
-        # ================= LINE =================
+        # ===== LINE =====
         with c2:
             st.markdown("### 🏭 LINE")
     
-            res = iqr_analysis(sub, "Hardness_LINE")
-    
-            if res is None:
-                st.warning("Not enough LINE data")
+            if len(line_df) < 5:
+                st.warning("Not enough LINE data for IQR analysis")
             else:
-                x = res["data"]
-                q1, q3 = res["Q1"], res["Q3"]
-                lo, hi = res["EXT"]
+                lo_iqr, hi_iqr, q1, q3 = iqr_range(line_df["Hardness_LINE"], K)
     
-                fig, ax = plt.subplots(figsize=(5,4))
-                ax.hist(x, bins=20, alpha=0.7)
-                ax.axvline(q1, linestyle="--", label="Q1")
-                ax.axvline(q3, linestyle="--", label="Q3")
-                ax.axvspan(q1, q3, alpha=0.2, label="CORE")
-                ax.set_title("LINE Hardness Distribution")
+                fig, ax = plt.subplots(figsize=(5,3))
+                ax.hist(line_df["Hardness_LINE"], bins=10, edgecolor="black", alpha=0.7)
+                ax.axvline(lo_iqr, linestyle="--", label="IQR Lower")
+                ax.axvline(hi_iqr, linestyle="--", label="IQR Upper")
+                ax.axvline(lo, linestyle=":", label="Std Min")
+                ax.axvline(hi, linestyle=":", label="Std Max")
+                ax.set_title("LINE – Optimal Hardness Range (IQR)")
                 ax.set_xlabel("HRB")
-                ax.set_ylabel("Count")
-                ax.legend()
+                ax.legend(bbox_to_anchor=(1.02,0.5), loc="center left", frameon=False)
                 ax.grid(alpha=0.3)
     
                 st.pyplot(fig)
     
-                core_width = q3 - q1
-                outlier_rate = ((x < lo) | (x > hi)).mean()
-    
-                st.info(f"🟢 CORE RANGE: {q1:.1f} ~ {q3:.1f} HRB")
-    
-                if core_width >= 3 and outlier_rate <= 0.1:
-                    st.success("✅ LINE Process Stable")
-                elif core_width < 3:
-                    st.warning("⚠️ LINE CORE range too narrow")
-                else:
-                    st.error("❌ LINE Process Unstable (many outliers)")
+                st.success(
+                    f"✅ LINE Optimal HRB Range (K={K}): "
+                    f"{lo_iqr:.1f} ~ {hi_iqr:.1f}"
+                )
