@@ -240,7 +240,17 @@ for _, cond in valid_conditions.iterrows():
     )
 
     # ================================
-     # ================================
+    # ================================
+# MECHANICAL PASS FLAG
+# ================================
+if "MECH_PASS" not in sub.columns:
+    sub["MECH_PASS"] = (
+        (sub["YS"] >= ys_lo) & (sub["YS"] <= ys_hi) &
+        (sub["TS"] >= ts_lo) & (sub["TS"] <= ts_hi) &
+        (sub["EL"] >= el_lo)
+    )
+
+    # ================================
     # VIEW 1 — DATA TABLE
     # ================================
     if view_mode == "📋 Data Table":
