@@ -143,10 +143,11 @@ view_mode = st.sidebar.radio(
         "📋 Data Table",
         "📈 Trend (LAB / LINE)",
         "📊 Distribution",
-        "📐 Hardness Safety Analysis"
+        "📐 Hardness Optimal Range (IQR)"
     ],
     index=0
 )
+
 if view_mode == "📐 Hardness Optimal Range (IQR)":
     K = st.sidebar.slider(
         "IQR Multiplier (K)",
