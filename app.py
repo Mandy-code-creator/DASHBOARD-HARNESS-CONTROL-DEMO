@@ -393,109 +393,127 @@ for _, cond in valid_conditions.iterrows():
         # ================================
     # ================================
    # ================================
-    # VIEW 4 — HARDNESS OPTIMAL RANGE (IQR)
     # ================================
-    elif view_mode == "📐 Hardness Optimal Range (IQR)":
+    # VIEW 4 — HARDNESS SAFETY ANALYSIS (IQR-BASED)
+    # ================================
+    elif view_mode == "📐 Hardness Safety Analysis":
     
-        st.markdown("## 📐 Hardness Optimal Range – IQR Method")
-        st.caption("📌 Phân tích thống kê – không ảnh hưởng QA PASS/FAIL")
+        st.subheader("📐 Hardness Safety / Optimal Range Analysis (IQR)")
     
-        c1, c2 = st.columns(2)
+        # ===== USER SELECT IQR FACTOR K =====
+        k = st.selectbox(
+            "IQR factor (K)",
+            [0.5, 0.75, 1.0, 1.25, 1.5],
+            index=2
+        )
     
-        # ================= LAB =================
+        # ===== COLLECT HARDNESS DATA (LAB + LINE) =====
+        lab_vals  = sub["Hardness_LAB"].dropna()
+        line_vals = sub["Hardness_LINE"].dropna()
+    
+        all_vals = pd.concat([lab_vals, line_vals])
+        all_vals = all_vals[all_vals > 0]
+    
+        if len(all_vals) < 10:
+            st.warning("⚠️ Not enough hardness data for IQR analysis")
+            st.stop()
+    
+        # ===== IQR CALCULATION =====
+        q1 = all_vals.quantile(0.25)
+        q3 = all_vals.quantile(0.75)
+        iqr = q3 - q1
+    
+        L_opt = q1 - k * iqr
+        U_opt = q3 + k * iqr
+    
+        # ===== SPEC LIMIT =====
+        spec_lo = sub["Std_Min"].iloc[0]
+        spec_hi = sub["Std_Max"].iloc[0]
+    
+        # ===== SAFE (INTERSECTION) RANGE =====
+        safe_lo = max(L_opt, spec_lo)
+        safe_hi = min(U_opt, spec_hi)
+    
+        # ===== TARGET HRB =====
+        target_hrb = (safe_lo + safe_hi) / 2
+    
+        # ===== SUMMARY METRIC =====
+        c1, c2, c3 = st.columns(3)
+    
         with c1:
-            st.markdown("### 🧪 LAB")
+            st.metric(
+                "Optimal Range (IQR)",
+                f"{L_opt:.1f} ~ {U_opt:.1f} HRB"
+            )
     
-            lab = sub[sub["Hardness_LAB"] > 0]["Hardness_LAB"]
-    
-            if len(lab) < 5:
-                st.warning("⚠️ LAB: không đủ dữ liệu để phân tích IQR")
-            else:
-                q1, q3 = lab.quantile([0.25, 0.75])
-                iqr = q3 - q1
-                lo_iqr = q1 - K * iqr
-                hi_iqr = q3 + K * iqr
-    
-                fig, ax = plt.subplots(figsize=(5,3))
-                ax.hist(lab, bins=10, edgecolor="black", alpha=0.6)
-                ax.axvline(lo_iqr, linestyle="--", label="IQR Low")
-                ax.axvline(hi_iqr, linestyle="--", label="IQR High")
-                ax.axvline(lab.mean(), linestyle="-.", label="Mean")
-                ax.set_title(f"LAB Hardness (K = {K})")
-                ax.legend()
-                ax.grid(alpha=0.3)
-    
-                st.pyplot(fig)
-    
-                st.success(
-                    f"✅ LAB Optimal HRB (IQR): **{lo_iqr:.1f} ~ {hi_iqr:.1f}**"
-                )
-    
-        # ================= LINE =================
         with c2:
-            st.markdown("### 🏭 LINE")
+            st.metric(
+                "SPEC Range",
+                f"{spec_lo:.1f} ~ {spec_hi:.1f} HRB"
+            )
     
-            line = sub[sub["Hardness_LINE"] > 0]["Hardness_LINE"]
+        with c3:
+            st.metric(
+                "🎯 Suggested Target",
+                f"{target_hrb:.1f} HRB"
+            )
     
-            if len(line) < 5:
-                st.warning("⚠️ LINE: không đủ dữ liệu để phân tích IQR")
-            else:
-                q1, q3 = line.quantile([0.25, 0.75])
-                iqr = q3 - q1
-                lo_iqr = q1 - K * iqr
-                hi_iqr = q3 + K * iqr
+        # ===== PLOT =====
+        fig, ax = plt.subplots(figsize=(6.5, 4))
     
-                fig, ax = plt.subplots(figsize=(5,3))
-                ax.hist(line, bins=10, edgecolor="black", alpha=0.6)
-                ax.axvline(lo_iqr, linestyle="--", label="IQR Low")
-                ax.axvline(hi_iqr, linestyle="--", label="IQR High")
-                ax.axvline(line.mean(), linestyle="-.", label="Mean")
-                ax.set_title(f"LINE Hardness (K = {K})")
-                ax.legend()
-                ax.grid(alpha=0.3)
-    
-                st.pyplot(fig)
-    
-                st.success(
-                    f"✅ LINE Optimal HRB (IQR): **{lo_iqr:.1f} ~ {hi_iqr:.1f}**"
-                )
-# ===== SPEC =====
-spec_lo = sub["Std_Min"].iloc[0]
-spec_hi = sub["Std_Max"].iloc[0]
-
-# ===== OVERLAP WITH SPEC =====
-safe_lo = max(L_opt, spec_lo)
-safe_hi = min(U_opt, spec_hi)
-
-st.markdown("### 🔍 Optimal Range vs Specification")
-
-st.write(
-    f"- **SPEC:** {spec_lo:.1f} ~ {spec_hi:.1f} HRB  \n"
-    f"- **OPTIMAL:** {L_opt:.1f} ~ {U_opt:.1f} HRB"
-)
-
-# ===== DECISION LOGIC =====
-if L_opt < U_opt:
-    if safe_lo < safe_hi:
-        target = (safe_lo + safe_hi) / 2
-
-        st.success(
-            f"✅ OPTIMAL nằm trong SPEC  \n"
-            f"🎯 **Recommended Target HRB:** **{target:.1f}**"
+        # LAB & LINE scatter
+        ax.scatter(
+            lab_vals.index + 1,
+            lab_vals,
+            label="LAB",
+            alpha=0.7
         )
-
-    else:
-        target = (L_opt + U_opt) / 2
-
-        st.warning(
-            f"⚠️ OPTIMAL lệch khỏi SPEC  \n"
-            f"🎯 Target theo process: **{target:.1f}**  \n"
-            f"❗ Rủi ro QA – cần điều chỉnh process"
+        ax.scatter(
+            line_vals.index + 1,
+            line_vals,
+            label="LINE",
+            alpha=0.7
         )
-else:
-    target = (spec_lo + spec_hi) / 2
-
-    st.error(
-        f"❌ Không xác định được OPTIMAL RANGE  \n"
-        f"🎯 Tạm dùng Target theo SPEC: **{target:.1f}**"
-    )
+    
+        # SPEC LIMIT
+        ax.axhline(spec_lo, linestyle="--", linewidth=1, label="SPEC LSL")
+        ax.axhline(spec_hi, linestyle="--", linewidth=1, label="SPEC USL")
+    
+        # OPTIMAL RANGE
+        ax.axhspan(
+            L_opt, U_opt,
+            alpha=0.15,
+            label="Optimal (IQR)"
+        )
+    
+        # SAFE RANGE
+        ax.axhspan(
+            safe_lo, safe_hi,
+            alpha=0.25,
+            label="Safe Control Zone"
+        )
+    
+        # TARGET
+        ax.axhline(
+            target_hrb,
+            linestyle="-.",
+            linewidth=2,
+            label=f"Target = {target_hrb:.1f}"
+        )
+    
+        ax.set_title(f"{spec} | Hardness Safety Analysis")
+        ax.set_xlabel("Sample Index")
+        ax.set_ylabel("HRB")
+        ax.legend(bbox_to_anchor=(1.02, 0.5), loc="center left", frameon=False)
+        ax.grid(alpha=0.3)
+    
+        st.pyplot(fig)
+    
+        img = fig_to_png(fig)
+        st.download_button(
+            "⬇️ Download Safety Analysis Chart",
+            data=img,
+            file_name=f"{spec}_hardness_safety_analysis.png",
+            mime="image/png",
+            key=f"dl_safe_{spec}_{mat}_{gauge}_{coat}"
+        )
