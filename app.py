@@ -3,11 +3,18 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 # =====================
-# CONFIG
+# PAGE CONFIG
 # =====================
-st.set_page_config(page_title="Hardness Control Dashboard", layout="wide")
+st.set_page_config(
+    page_title="Hardness Control Dashboard",
+    layout="wide"
+)
 
-DATA_URL = "https://docs.google.com/spreadsheets/d/1GdnY09hJ2qVHuEBAIJ-eU6B5z8ZdgcGf4P7ZjlAt4JI/export?format=csv"
+DATA_URL = (
+    "https://docs.google.com/spreadsheets/d/"
+    "1GdnY09hJ2qVHuEBAIJ-eU6B5z8ZdgcGf4P7ZjlAt4JI/"
+    "export?format=csv"
+)
 
 # =====================
 # LOAD DATA
@@ -60,12 +67,25 @@ sub = (
 # =====================
 # STANDARD
 # =====================
+if sub.empty:
+    st.error("❌ No data found for selected condition")
+    st.stop()
+
 lo = sub["Std_Min"].iloc[0]
 hi = sub["Std_Max"].iloc[0]
 
+# =====================
 # NG FLAGS
-sub["NG_LAB"]  = (sub["Hardness_LAB"]  < lo) | (sub["Hardness_LAB"]  > hi)
-sub["NG_LINE"] = (sub["Hardness_LINE"] < lo) | (sub["Hardness_LINE"] > hi)
+# =====================
+sub["NG_LAB"] = (
+    (sub["Hardness_LAB"] < lo) |
+    (sub["Hardness_LAB"] > hi)
+)
+
+sub["NG_LINE"] = (
+    (sub["Hardness_LINE"] < lo) |
+    (sub["Hardness_LINE"] > hi)
+)
 
 n_coils = len(sub)
 
@@ -119,11 +139,23 @@ elif view_mode == "📈 View 2 – Trend":
         st.subheader("📈 Hardness Trend")
 
         fig, ax = plt.subplots(figsize=(10, 4))
-        ax.plot(sub.index + 1, sub["Hardness_LAB"], marker="o", label="LAB")
-        ax.plot(sub.index + 1, sub["Hardness_LINE"], marker="s", label="LINE")
-        ax.axhline(lo, linestyle="--")
-        ax.axhline(hi, linestyle="--")
-        ax.set_xlabel("Coil order")
+        ax.plot(
+            sub.index + 1,
+            sub["Hardness_LAB"],
+            marker="o",
+            label="LAB"
+        )
+        ax.plot(
+            sub.index + 1,
+            sub["Hardness_LINE"],
+            marker="s",
+            label="LINE"
+        )
+
+        ax.axhline(lo, linestyle="--", label="Std Min")
+        ax.axhline(hi, linestyle="--", label="Std Max")
+
+        ax.set_xlabel("Coil Order")
         ax.set_ylabel("Hardness (HRB)")
         ax.legend()
         ax.grid(alpha=0.3)
@@ -138,7 +170,7 @@ elif view_mode == "📊 View 3 – Distribution":
     if n_coils < 30:
         st.warning("⚠️ View 3 requires ≥ 30 coils")
     else:
-        st.subheader("📊 Hardness Distribution")
+        st.subheader("📊 Hardness Distribution (LAB)")
 
         hr = sub["Hardness_LAB"].dropna()
 
@@ -146,6 +178,7 @@ elif view_mode == "📊 View 3 – Distribution":
         ax.hist(hr, bins=10)
         ax.axvline(lo, linestyle="--")
         ax.axvline(hi, linestyle="--")
+
         ax.set_xlabel("Hardness (HRB)")
         ax.set_ylabel("Count")
         ax.grid(alpha=0.3)
@@ -179,15 +212,20 @@ elif view_mode == "📐 View 4 – Hardness Safety Analysis":
 
         fig, ax = plt.subplots(figsize=(6, 4))
         ax.bar(bin_df.index, bin_df.values)
+
         ax.axvline(lo, linestyle="--")
         ax.axvline(hi, linestyle="--")
+
         ax.set_xlabel("Hardness (HRB)")
-        ax.set_ylabel("Coil count")
+        ax.set_ylabel("Coil Count")
         ax.grid(alpha=0.3)
 
         st.pyplot(fig)
 
-        safe_bins = bin_df[(bin_df.index >= lo) & (bin_df.index <= hi)]
+        safe_bins = bin_df[
+            (bin_df.index >= lo) &
+            (bin_df.index <= hi)
+        ]
 
         if not safe_bins.empty:
             st.success(
