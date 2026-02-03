@@ -287,176 +287,58 @@ for _, cond in valid_conditions.iterrows():
 
 
     # ================================
-    # ================================
-    # VIEW 3 — DISTRIBUTION
-    # ================================
-    elif view_mode == "📊 Distribution":
-    
-        # ===== FILTER DATA =====
-        lab_df  = sub[sub["Hardness_LAB"]  > 0]
-        line_df = sub[sub["Hardness_LINE"] > 0]
-    
-        # ===== STATISTIC =====
-        mu_lab   = lab_df["Hardness_LAB"].mean()
-        std_lab  = lab_df["Hardness_LAB"].std()
-    
-        mu_line  = line_df["Hardness_LINE"].mean()
-        std_line = line_df["Hardness_LINE"].std()
-    
-        # ===== FIGURE =====
-        fig, ax = plt.subplots(figsize=(6, 4))
-    
-        # ===== HISTOGRAM =====
-        lab_counts, lab_bins, _ = ax.hist(
-            lab_df["Hardness_LAB"],
-            bins=10,
-            alpha=0.5,
-            label="LAB",
-            edgecolor="black"
-        )
-    
-        line_counts, line_bins, _ = ax.hist(
-            line_df["Hardness_LINE"],
-            bins=10,
-            alpha=0.5,
-            label="LINE",
-            edgecolor="black"
-        )
-    
-        # ===== NORMAL CURVE LAB (±3σ) =====
-        if std_lab > 0:
-            x_lab = np.linspace(mu_lab - 3*std_lab, mu_lab + 3*std_lab, 400)
-            pdf_lab = (1/(std_lab*np.sqrt(2*np.pi))) * np.exp(
-                -0.5 * ((x_lab - mu_lab) / std_lab) ** 2
-            )
-    
-            ax.plot(
-                x_lab,
-                pdf_lab * len(lab_df) * (lab_bins[1] - lab_bins[0]),
-                linestyle="--",
-                linewidth=2,
-                label="LAB Normal"
-            )
-    
-        # ===== NORMAL CURVE LINE (±3σ) =====
-        if std_line > 0:
-            x_line = np.linspace(mu_line - 3*std_line, mu_line + 3*std_line, 400)
-            pdf_line = (1/(std_line*np.sqrt(2*np.pi))) * np.exp(
-                -0.5 * ((x_line - mu_line) / std_line) ** 2
-            )
-    
-            ax.plot(
-                x_line,
-                pdf_line * len(line_df) * (line_bins[1] - line_bins[0]),
-                linestyle="--",
-                linewidth=2,
-                label="LINE Normal"
-            )
-    
-        # ===== SPEC LIMIT =====
-        ax.axvline(lo, linestyle="--", linewidth=1, label="LSL")
-        ax.axvline(hi, linestyle="--", linewidth=1, label="USL")
-    
-        # ===== STAT TEXT (OUTSIDE PLOT) =====
-        stat_text = (
-            f"LAB  : μ = {mu_lab:.2f}, σ = {std_lab:.2f}\n"
-            f"LINE : μ = {mu_line:.2f}, σ = {std_line:.2f}"
-        )
-    
-        ax.text(
-            1.02, 0.98,
-            stat_text,
-            transform=ax.transAxes,
-            ha="left",
-            va="top",
-            fontsize=10,
-            bbox=dict(facecolor="white", alpha=0.85, edgecolor="none")
-        )
-    
-        # ===== FINAL STYLE =====
-        ax.set_title(f"{spec} | Hardness Distribution")
-        ax.set_xlabel("HRB")
-        ax.set_ylabel("Count")
-        ax.legend(bbox_to_anchor=(1.02, 0.5), loc="center left", frameon=False)
-        ax.grid(alpha=0.3)
-    
-        st.pyplot(fig)
-        img = fig_to_png(fig)
-        st.download_button(
-            "⬇️ Download Distribution Chart",
-            data=img,
-            file_name=f"{spec}_hardness_distribution.png",
-            mime="image/png",
-            key=f"dl_dist_{spec}_{mat}_{gauge}_{coat}"
-        )
-    # ================================
-        # ================================
-    # ================================
-   # ================================
-    # ================================
        # ================================
-    # VIEW 4 — HARDNESS SAFETY ANALYSIS (IQR OPTIMAL RANGE)
+    # VIEW 4 — HARDNESS OPTIMAL RANGE (IQR)
     # ================================
-    elif view_mode == "📐 Hardness Safety Analysis":
+    elif view_mode == "📐 Hardness Optimal Range (IQR)":
 
-        st.markdown("### 📐 Hardness Safety Analysis – IQR Method")
-        st.caption("🎯 LAB & LINE combined | Adjustable K | Suggest Optimal Control Range")
+        st.markdown("### 📐 Hardness Optimal Control Range – IQR Method")
+        st.caption("🎯 LAB & LINE on same chart | Adjustable K | Compare with SPEC")
 
-        # ===== USER SELECT K =====
-        k = st.select_slider(
-            "IQR Coefficient (K)",
-            options=[0.5, 0.75, 1.0, 1.25, 1.5],
-            value=1.0
-        )
-
-        # ===== FILTER VALID DATA =====
-        lab = sub[sub["Hardness_LAB"] > 0]["Hardness_LAB"]
-        line = sub[sub["Hardness_LINE"] > 0]["Hardness_LINE"]
+        # ===== VALID DATA =====
+        lab = sub.loc[sub["Hardness_LAB"] > 0, "Hardness_LAB"]
+        line = sub.loc[sub["Hardness_LINE"] > 0, "Hardness_LINE"]
 
         if lab.empty or line.empty:
             st.warning("⚠️ Not enough valid LAB / LINE data")
-            st.stop()
+            continue
 
-        # ===== IQR CALC =====
+        # ===== IQR FUNCTION =====
         def iqr_range(x, k):
             q1 = x.quantile(0.25)
             q3 = x.quantile(0.75)
             iqr = q3 - q1
-            return q1 - k * iqr, q3 + k * iqr, q1, q3
+            return q1 - k * iqr, q3 + k * iqr
 
-        L_lab, U_lab, q1_lab, q3_lab = iqr_range(lab, k)
-        L_line, U_line, q1_line, q3_line = iqr_range(line, k)
+        L_lab, U_lab = iqr_range(lab, K)
+        L_line, U_line = iqr_range(line, K)
 
-        # ===== COMBINED OPTIMAL RANGE =====
+        # ===== COMBINED OPTIMAL =====
         opt_lo = max(L_lab, L_line)
         opt_hi = min(U_lab, U_line)
 
         spec_lo, spec_hi = lo, hi
-
         safe_lo = max(opt_lo, spec_lo)
         safe_hi = min(opt_hi, spec_hi)
 
         target = (safe_lo + safe_hi) / 2 if safe_lo < safe_hi else np.nan
 
-        # ===== FIGURE =====
+        # ===== PLOT =====
         fig, ax = plt.subplots(figsize=(6,4))
 
         ax.hist(lab, bins=10, alpha=0.5, label="LAB", edgecolor="black")
         ax.hist(line, bins=10, alpha=0.5, label="LINE", edgecolor="black")
 
-        # ===== SPEC LIMIT =====
-        ax.axvline(spec_lo, linestyle="--", linewidth=1, label="LSL")
-        ax.axvline(spec_hi, linestyle="--", linewidth=1, label="USL")
+        ax.axvline(spec_lo, linestyle="--", label="LSL")
+        ax.axvline(spec_hi, linestyle="--", label="USL")
 
-        # ===== OPTIMAL RANGE =====
-        ax.axvspan(safe_lo, safe_hi, alpha=0.2, label="OPTIMAL RANGE")
+        if safe_lo < safe_hi:
+            ax.axvspan(safe_lo, safe_hi, alpha=0.25, label="OPTIMAL RANGE")
 
-        # ===== TARGET =====
         if not np.isnan(target):
             ax.axvline(target, linestyle="-.", linewidth=2, label=f"TARGET ≈ {target:.1f}")
 
-        # ===== STYLE =====
-        ax.set_title("LAB + LINE Hardness | Optimal Control Range (IQR)")
+        ax.set_title("LAB + LINE Hardness – Optimal Control Range")
         ax.set_xlabel("HRB")
         ax.set_ylabel("Count")
         ax.legend(bbox_to_anchor=(1.02, 0.5), loc="center left", frameon=False)
@@ -466,11 +348,11 @@ for _, cond in valid_conditions.iterrows():
 
         # ===== SUMMARY =====
         st.markdown("#### 📌 Decision Summary")
-        st.write(
+        st.markdown(
             f"""
             - **SPEC Range** : {spec_lo:.1f} ~ {spec_hi:.1f} HRB  
-            - **IQR Optimal Range** : {opt_lo:.1f} ~ {opt_hi:.1f} HRB  
+            - **IQR (K={K}) Optimal Range** : {opt_lo:.1f} ~ {opt_hi:.1f} HRB  
             - **SAFE Control Range** : {safe_lo:.1f} ~ {safe_hi:.1f} HRB  
-            - **🎯 Suggested Target HRB** : **{target:.1f}**
+            - **🎯 Suggested Target** : **{target:.1f} HRB**
             """
         )
