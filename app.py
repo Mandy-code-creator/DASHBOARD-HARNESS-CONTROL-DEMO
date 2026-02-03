@@ -340,30 +340,24 @@ for _, cond in valid_conditions.iterrows():
 
 
     # ================================
-    # VIEW 4 — SAFETY ANALYSIS
-    # ================================
-    elif view_mode == "📐 Hardness Safety Analysis":
-        mech_ok = sub[sub["MECH_PASS"]].copy()
+    # VIEW 4 – ANALYSIS (<30 OK)
+# =========================
+st.header("View 4 – Statistical Analysis")
 
-        if mech_ok.empty:
-            st.warning("⚠️ No mechanical PASS data")
-            continue
+n = len(df_spec)
 
-        mech_ok["LAB_BIN"]  = mech_ok["Hardness_LAB"].round().astype("Int64")
-        mech_ok["LINE_BIN"] = mech_ok["Hardness_LINE"].round().astype("Int64")
+if n < 30:
+    st.warning(f"⚠️ Chỉ có {n} cuộn (<30) – vẫn phân tích nhưng **chỉ tham khảo**")
 
-        c1, c2 = st.columns(2)
+mean = df_spec["Hardness_LAB"].mean()
+std = df_spec["Hardness_LAB"].std(ddof=1)
 
-        with c1:
-            lab = mech_ok.groupby("LAB_BIN")["MECH_PASS"].mean()
-            fig, ax = plt.subplots()
-            ax.bar(lab.index, lab.values)
-            ax.axhline(1.0, linestyle="--")
-            st.pyplot(fig)
+cp = (hi - lo) / (6 * std) if std > 0 else np.nan
+cpk = min((hi - mean), (mean - lo)) / (3 * std) if std > 0 else np.nan
 
-        with c2:
-            line = mech_ok.groupby("LINE_BIN")["MECH_PASS"].mean()
-            fig, ax = plt.subplots()
-            ax.bar(line.index, line.values)
-            ax.axhline(1.0, linestyle="--")
-            st.pyplot(fig)
+st.write({
+    "Mean": round(mean, 2),
+    "Std": round(std, 2),
+    "Cp": round(cp, 2),
+    "Cpk": round(cpk, 2),
+})
