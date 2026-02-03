@@ -383,104 +383,111 @@ for _, cond in valid_conditions.iterrows():
         )
     # ================================
         # ================================
-    # VIEW 4 — HARDNESS SAFETY ANALYSIS (DECISION MODE)
     # ================================
-    elif view_mode == "📐 Hardness Safety Analysis":
+# VIEW 4 — HARDNESS OPTIMAL RANGE (IQR)
+# ================================
+elif view_mode == "📐 Hardness Safety Analysis":
 
-        st.markdown("## 📐 Hardness Safety Analysis (Bin = 1 HRB)")
-        st.caption("🎯 SAFE = 100% PASS YS + TS + EL")
+    st.markdown("## 📐 Hardness Optimal Range (IQR-based)")
+    st.caption("🎯 Process-based optimization (LAB & LINE independent)")
 
-        # ===== LẤY COIL CÓ ĐỦ DỮ LIỆU =====
-        mech_df = sub.dropna(
-            subset=["YS","TS","EL","Hardness_LAB","Hardness_LINE"]
-        ).copy()
+    def iqr_analysis(df, col):
+        x = df[col].dropna()
+        x = x[x > 0]
 
-        # ===== MECHANICAL STANDARD =====
-        ys_lo, ys_hi = mech_df["YS"].min()*0 + lo, mech_df["YS"].max()*0 + hi  # dummy giữ chỗ
+        if len(x) < 5:
+            return None
 
-        # ===== MECH PASS (STRICT) =====
-        mech_df["MECH_PASS"] = (
-            (mech_df["YS"] >= mech_df["YS"]) &  # luôn true – giữ đúng logic cũ
-            (mech_df["TS"] >= mech_df["TS"]) &
-            (mech_df["EL"] >= mech_df["EL"])
-        )
+        q1 = x.quantile(0.25)
+        q3 = x.quantile(0.75)
+        iqr = q3 - q1
 
-        # ===== BIN 1 HRB =====
-        mech_df["HRB_LAB_BIN"]  = mech_df["Hardness_LAB"].round().astype("Int64")
-        mech_df["HRB_LINE_BIN"] = mech_df["Hardness_LINE"].round().astype("Int64")
+        lo_ext = q1 - 1.5 * iqr
+        hi_ext = q3 + 1.5 * iqr
 
-        def safety_analysis(df, bin_col):
-            g = (
-                df[df[bin_col] > 0]
-                .groupby(bin_col)["MECH_PASS"]
-                .agg(["count","mean"])
-                .reset_index()
-                .rename(columns={
-                    bin_col: "HRB",
-                    "count": "n",
-                    "mean": "pass_rate"
-                })
-            )
+        return {
+            "data": x,
+            "Q1": q1,
+            "Q3": q3,
+            "IQR": iqr,
+            "CORE": (q1, q3),
+            "EXT": (lo_ext, hi_ext)
+        }
 
-            safe_bins = g[g["pass_rate"] == 1.0]["HRB"].values
-            if len(safe_bins) == 0:
-                return g, None
+    c1, c2 = st.columns(2)
 
-            ranges = []
-            start = prev = safe_bins[0]
-            for h in safe_bins[1:]:
-                if h == prev + 1:
-                    prev = h
-                else:
-                    ranges.append((start, prev))
-                    start = prev = h
-            ranges.append((start, prev))
+    # ================= LAB =================
+    with c1:
+        st.markdown("### 🧪 LAB")
 
-            best = max(ranges, key=lambda x: x[1]-x[0])
-            return g, best
+        res = iqr_analysis(sub, "Hardness_LAB")
 
-        c1, c2 = st.columns(2)
-
-        # ================= LAB =================
-        with c1:
-            st.markdown("### 🧪 LAB")
-
-            lab_tbl, lab_safe = safety_analysis(mech_df, "HRB_LAB_BIN")
+        if res is None:
+            st.warning("Not enough LAB data")
+        else:
+            x = res["data"]
+            q1, q3 = res["Q1"], res["Q3"]
+            lo, hi = res["EXT"]
 
             fig, ax = plt.subplots(figsize=(5,4))
-            ax.bar(lab_tbl["HRB"], lab_tbl["pass_rate"])
-            ax.axhline(1.0, linestyle="--")
-            ax.set_ylim(0, 1.05)
-            ax.set_xlabel("Hardness (HRB)")
-            ax.set_ylabel("Pass Rate")
-            ax.set_title("LAB – Mechanical Pass Rate by HRB")
+            ax.hist(x, bins=20, alpha=0.7)
+            ax.axvline(q1, linestyle="--", label="Q1")
+            ax.axvline(q3, linestyle="--", label="Q3")
+            ax.axvspan(q1, q3, alpha=0.2, label="CORE")
+            ax.set_title("LAB Hardness Distribution")
+            ax.set_xlabel("HRB")
+            ax.set_ylabel("Count")
+            ax.legend()
             ax.grid(alpha=0.3)
 
             st.pyplot(fig)
 
-            if lab_safe:
-                st.success(f"✅ LAB SAFE HRB RANGE: {lab_safe[0]} ~ {lab_safe[1]}")
+            core_width = q3 - q1
+            outlier_rate = ((x < lo) | (x > hi)).mean()
+
+            st.info(f"🟢 CORE RANGE: {q1:.1f} ~ {q3:.1f} HRB")
+
+            if core_width >= 3 and outlier_rate <= 0.1:
+                st.success("✅ LAB Process Stable")
+            elif core_width < 3:
+                st.warning("⚠️ LAB CORE range too narrow")
             else:
-                st.error("❌ LAB: No HRB range achieves 100% mechanical PASS")
+                st.error("❌ LAB Process Unstable (many outliers)")
 
-        # ================= LINE =================
-        with c2:
-            st.markdown("### 🏭 LINE")
+    # ================= LINE =================
+    with c2:
+        st.markdown("### 🏭 LINE")
 
-            line_tbl, line_safe = safety_analysis(mech_df, "HRB_LINE_BIN")
+        res = iqr_analysis(sub, "Hardness_LINE")
+
+        if res is None:
+            st.warning("Not enough LINE data")
+        else:
+            x = res["data"]
+            q1, q3 = res["Q1"], res["Q3"]
+            lo, hi = res["EXT"]
 
             fig, ax = plt.subplots(figsize=(5,4))
-            ax.bar(line_tbl["HRB"], line_tbl["pass_rate"])
-            ax.axhline(1.0, linestyle="--")
-            ax.set_ylim(0, 1.05)
-            ax.set_xlabel("Hardness (HRB)")
-            ax.set_ylabel("Pass Rate")
-            ax.set_title("LINE – Mechanical Pass Rate by HRB")
+            ax.hist(x, bins=20, alpha=0.7)
+            ax.axvline(q1, linestyle="--", label="Q1")
+            ax.axvline(q3, linestyle="--", label="Q3")
+            ax.axvspan(q1, q3, alpha=0.2, label="CORE")
+            ax.set_title("LINE Hardness Distribution")
+            ax.set_xlabel("HRB")
+            ax.set_ylabel("Count")
+            ax.legend()
             ax.grid(alpha=0.3)
 
             st.pyplot(fig)
 
-            if line_safe:
-                st.success(f"✅ LINE SAFE HRB RANGE: {line_safe[0]} ~ {line_safe[1]}")
+            core_width = q3 - q1
+            outlier_rate = ((x < lo) | (x > hi)).mean()
+
+            st.info(f"🟢 CORE RANGE: {q1:.1f} ~ {q3:.1f} HRB")
+
+            if core_width >= 3 and outlier_rate <= 0.1:
+                st.success("✅ LINE Process Stable")
+            elif core_width < 3:
+                st.warning("⚠️ LINE CORE range too narrow")
             else:
-                st.error("❌ LINE: No HRB range achieves 100% mechanical PASS")
+                st.error("❌ LINE Process Unstable (many outliers)")
